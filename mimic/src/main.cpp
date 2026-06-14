@@ -93,6 +93,8 @@ void application()
   auto const pump_button = resources::pump_button();
   // Connected to G1 on micromod
   auto const pump_direction = resources::pump_direction();
+  // Connected to G2 on micromod
+  auto const inflate_button = resources::inflate_button();
   auto pump_power = pwm16_channel_inverter(resources::pump_power());
   auto const pump_power_frequency = resources::pump_power_frequency();
 
@@ -103,7 +105,7 @@ void application()
   // ===========================================================================
   pump_power_frequency->frequency(15'000);
   pump_button->configure({ .resistor = hal::pin_resistor::pull_up });
-  pump_direction->level(true);  // Put pump into brake - slow decay mode
+  inflate_button->configure({ .resistor = hal::pin_resistor::pull_up });
 
   // ===========================================================================
   // Setup Robotic Arm
@@ -203,13 +205,19 @@ void application()
     wrist_servo.position(wrist_angle);
 
     // =========================================================================
-    // Handle Bump
+    // Handle Pump
     // =========================================================================
     constexpr auto max_u16 = std::numeric_limits<hal::u16>::max();
     constexpr hal::u16 pump_power_ratio = (max_u16 * 3U) / 4U;  // 75%
     if (not pump_button->level()) {
+      pump_direction->level(true);  // Put pump into brake - slow decay mode
+      pump_power.duty_cycle(pump_power_ratio);
+    } else if (not inflate_button->level()) {
+      pump_direction->level(false);
       pump_power.duty_cycle(pump_power_ratio);
     } else {
+      // Both of these put the motor into slow decay mode
+      pump_direction->level(true);
       pump_power.duty_cycle(0);
     }
   }

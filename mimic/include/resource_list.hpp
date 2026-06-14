@@ -40,6 +40,7 @@ hal::v5::strong_ptr<hal::pwm_group_manager> pwm_frequency();
 hal::v5::strong_ptr<hal::i2c> i2c();
 hal::v5::strong_ptr<hal::input_pin> pump_button();
 hal::v5::strong_ptr<hal::output_pin> pump_direction();
+hal::v5::strong_ptr<hal::input_pin> inflate_button();
 hal::v5::strong_ptr<hal::pwm16_channel> pump_power();
 hal::v5::strong_ptr<hal::pwm_group_manager> pump_power_frequency();
 }  // namespace resources
