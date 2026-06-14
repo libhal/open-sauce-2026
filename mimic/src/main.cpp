@@ -23,8 +23,11 @@
 #include <libhal-sensor/as5600.hpp>
 #include <libhal-util/serial.hpp>
 #include <libhal-util/steady_clock.hpp>
+#include <libhal/pointers.hpp>
+#include <libhal/pwm.hpp>
 #include <libhal/units.hpp>
 
+#include <limits>
 #include <resource_list.hpp>
 
 enum class angle_select : uint8_t
@@ -54,6 +57,29 @@ int main()
   application();
 }
 
+// Exists because the PWM duty is reversed for the DRV8871 in brake decay mode
+struct pwm16_channel_inverter : public hal::pwm16_channel
+{
+  pwm16_channel_inverter(hal::v5::strong_ptr<hal::pwm16_channel> p_pwm)
+    : m_pwm(p_pwm)
+  {
+  }
+
+  hal::u32 driver_frequency() override
+  {
+    return m_pwm->frequency();
+  }
+
+  void driver_duty_cycle(hal::u16 p_duty_cycle) override
+  {
+    constexpr auto max_u16 = std::numeric_limits<hal::u16>::max();
+    auto const inverted_pwm = max_u16 - p_duty_cycle;
+    m_pwm->duty_cycle(inverted_pwm);
+  }
+
+  hal::v5::strong_ptr<hal::pwm16_channel> m_pwm;
+};
+
 void application()
 {
   using namespace std::chrono_literals;
@@ -63,8 +89,25 @@ void application()
   auto const console = resources::console();
   auto const i2c = resources::i2c();
   auto const uart = resources::uart2();
+  // Connected to G0 on micromod
+  auto const pump_button = resources::pump_button();
+  // Connected to G1 on micromod
+  auto const pump_direction = resources::pump_direction();
+  auto pump_power = pwm16_channel_inverter(resources::pump_power());
+  auto const pump_power_frequency = resources::pump_power_frequency();
 
   hal::print(*console, "Mimic Application Starting...\n");
+
+  // ===========================================================================
+  // Setup Pump
+  // ===========================================================================
+  pump_power_frequency->frequency(15'000);
+  pump_button->configure({ .resistor = hal::pin_resistor::pull_up });
+  pump_direction->level(true);  // Put pump into brake - slow decay mode
+
+  // ===========================================================================
+  // Setup Robotic Arm
+  // ===========================================================================
 
   hal::actuator::rx_64::config wrist_config = {
     .baud_rate = 57600, .id = 3, .min_angle = 60, .max_angle = 240
@@ -102,29 +145,41 @@ void application()
   shoulder_lead_servo.led(false);
   shoulder_opose_servo.led(false);
 
+  // ===========================================================================
+  // Setup Mimic Controller
+  // ===========================================================================
   auto i2c_mux = hal::expander::tca9548a(*i2c);
   std::bitset<8> init_ports{ 0x00 };
   init_ports.set(0);
   i2c_mux.set_ports(init_ports);
   hal::sensor::as5600 hall_sensor(i2c);
 
-  std::array<hal::degrees, 4> mimic_angles;
-
   while (true) {
     using namespace std::literals;
     using namespace hal;
+
+    // =========================================================================
+    // Measure Mimic
+    // =========================================================================
+    std::array<hal::degrees, 4> mimic_angles;
     for (size_t i = 0; i < mimic_angles.size(); i++) {
       std::bitset<8> ports{ 0x00 };
       ports.set(i);
       i2c_mux.set_ports(ports);
 
+      // TODO(#15): Determine shorter delay frequency for i2c mux. The mux
+      // should be able to switch at a much faster rate than 10ms.
       hal::delay(*clock, 10ms);
+
       auto magnet_status = hall_sensor.magnet_status();
       if (magnet_status.detected) {
         mimic_angles[i] = hall_sensor.raw_angle();
       }
-      // hal::delay(*clock, 10ms);
     }
+
+    // =========================================================================
+    // Pass angles to mimic
+    // =========================================================================
 
     auto shoulder_angle =
       process_angle(mimic_angles[(u8)angle_select::shoulder_angle], 150.0f);
@@ -146,5 +201,16 @@ void application()
     shoulder_lead_servo.sync_position(shoulder_angle, shoulder_opose_servo);
     elbow_servo.position(elbow_angle);
     wrist_servo.position(wrist_angle);
+
+    // =========================================================================
+    // Handle Bump
+    // =========================================================================
+    constexpr auto max_u16 = std::numeric_limits<hal::u16>::max();
+    constexpr hal::u16 pump_power_ratio = (max_u16 * 3U) / 4U;  // 75%
+    if (not pump_button->level()) {
+      pump_power.duty_cycle(pump_power_ratio);
+    } else {
+      pump_power.duty_cycle(0);
+    }
   }
 }

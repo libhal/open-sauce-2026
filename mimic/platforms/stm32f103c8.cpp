@@ -17,6 +17,7 @@
 #include <libhal-arm-mcu/stm32f1/can.hpp>
 #include <libhal-arm-mcu/stm32f1/clock.hpp>
 #include <libhal-arm-mcu/stm32f1/constants.hpp>
+#include <libhal-arm-mcu/stm32f1/input_pin.hpp>
 #include <libhal-arm-mcu/stm32f1/output_pin.hpp>
 #include <libhal-arm-mcu/stm32f1/timer.hpp>
 #include <libhal-arm-mcu/stm32f1/uart.hpp>
@@ -127,24 +128,17 @@ hal::v5::strong_ptr<hal::output_pin> status_led()
   return status_led_ptr;
 }
 
-hal::v5::strong_ptr<hal::can_transceiver> can_transceiver()
+hal::v5::strong_ptr<hal::i2c> i2c()
 {
-  throw hal::operation_not_supported(nullptr);
-}
+  static hal::stm32f1::output_pin sda_output_pin('B', 7);
+  static hal::stm32f1::output_pin scl_output_pin('B', 6);
 
-hal::v5::strong_ptr<hal::can_bus_manager> can_bus_manager()
-{
-  throw hal::operation_not_supported(nullptr);
-}
-
-hal::v5::strong_ptr<hal::can_identifier_filter> can_identifier_filter()
-{
-  throw hal::operation_not_supported(nullptr);
-}
-
-hal::v5::strong_ptr<hal::pwm> pwm()
-{
-  throw hal::operation_not_supported(nullptr);
+  return hal::v5::make_strong_ptr<hal::bit_bang_i2c>(driver_allocator(),
+                                                     hal::bit_bang_i2c::pins{
+                                                       .sda = &sda_output_pin,
+                                                       .scl = &scl_output_pin,
+                                                     },
+                                                     *clock_ptr);
 }
 
 auto& timer1()
@@ -155,7 +149,7 @@ auto& timer1()
 }
 
 hal::v5::optional_ptr<hal::pwm16_channel> pwm16_channel_ptr;
-hal::v5::strong_ptr<hal::pwm16_channel> pwm_channel()
+hal::v5::strong_ptr<hal::pwm16_channel> pump_power()
 {
   if (pwm16_channel_ptr) {
     return pwm16_channel_ptr;
@@ -169,7 +163,7 @@ hal::v5::strong_ptr<hal::pwm16_channel> pwm_channel()
 }
 
 hal::v5::optional_ptr<hal::pwm_group_manager> pwm_group_manager_ptr;
-hal::v5::strong_ptr<hal::pwm_group_manager> pwm_frequency()
+hal::v5::strong_ptr<hal::pwm_group_manager> pump_power_frequency()
 {
   if (pwm_group_manager_ptr) {
     return pwm_group_manager_ptr;
@@ -182,16 +176,25 @@ hal::v5::strong_ptr<hal::pwm_group_manager> pwm_frequency()
   return pwm_group_manager_ptr;
 }
 
-hal::v5::strong_ptr<hal::i2c> i2c()
+hal::v5::optional_ptr<hal::input_pin> pump_button_ptr;
+hal::v5::strong_ptr<hal::input_pin> pump_button()
 {
-  static hal::stm32f1::output_pin sda_output_pin('B', 7);
-  static hal::stm32f1::output_pin scl_output_pin('B', 6);
+  if (not pump_button_ptr) {
+    pump_button_ptr = hal::v5::make_strong_ptr<hal::stm32f1::input_pin>(
+      driver_allocator(), 'A', 0);
+  }
 
-  return hal::v5::make_strong_ptr<hal::bit_bang_i2c>(driver_allocator(),
-                                                     hal::bit_bang_i2c::pins{
-                                                       .sda = &sda_output_pin,
-                                                       .scl = &scl_output_pin,
-                                                     },
-                                                     *clock_ptr);
+  return pump_button_ptr;
+}
+
+hal::v5::optional_ptr<hal::output_pin> pump_direction_pin;
+hal::v5::strong_ptr<hal::output_pin> pump_direction()
+{
+  if (not pump_direction_pin) {
+    pump_direction_pin = hal::v5::make_strong_ptr<hal::stm32f1::output_pin>(
+      driver_allocator(), 'A', 15);
+  }
+
+  return pump_direction_pin;
 }
 }  // namespace resources
