@@ -16,6 +16,7 @@
 #include <cstdint>
 
 #include <array>
+#include <limits>
 
 #include <libhal-actuator/mx_64.hpp>
 #include <libhal-actuator/rx_64.hpp>
@@ -27,8 +28,11 @@
 #include <libhal/pwm.hpp>
 #include <libhal/units.hpp>
 
-#include <limits>
 #include <resource_list.hpp>
+
+#define KEEP_MIMIC 1
+#define KEEP_ARM 1
+#define KEEP_PUMP 1
 
 enum class angle_select : uint8_t
 {
@@ -98,13 +102,17 @@ void application()
 
   hal::print(*console, "Mimic Application Starting...\n");
 
+#if KEEP_PUMP
   // ===========================================================================
   // Setup Pump
   // ===========================================================================
   pump_power_frequency->frequency(15'000);
   pump_button->configure({ .resistor = hal::pin_resistor::pull_up });
-  pump_direction->level(true);  // Put pump into brake - slow decay mode
+  constexpr auto inflation_time = 3s;
+  auto inflation_deadline = clock->uptime();
+#endif
 
+#if KEEP_ARM
   // ===========================================================================
   // Setup Robotic Arm
   // ===========================================================================
@@ -144,7 +152,9 @@ void application()
   spin_servo.led(false);
   shoulder_lead_servo.led(false);
   shoulder_opose_servo.led(false);
+#endif
 
+#if KEEP_MIMIC
   // ===========================================================================
   // Setup Mimic Controller
   // ===========================================================================
@@ -153,8 +163,10 @@ void application()
   init_ports.set(0);
   i2c_mux.set_ports(init_ports);
   hal::sensor::as5600 hall_sensor(i2c);
+#endif
 
   while (true) {
+#if KEEP_MIMIC
     using namespace std::literals;
     using namespace hal;
 
@@ -176,7 +188,9 @@ void application()
         mimic_angles[i] = hall_sensor.raw_angle();
       }
     }
+#endif
 
+#if KEEP_ARM
     // =========================================================================
     // Pass angles to mimic
     // =========================================================================
@@ -201,16 +215,26 @@ void application()
     shoulder_lead_servo.sync_position(shoulder_angle, shoulder_opose_servo);
     elbow_servo.position(elbow_angle);
     wrist_servo.position(wrist_angle);
+#endif
 
+#if KEEP_PUMP
     // =========================================================================
-    // Handle Bump
+    // Handle Pump
     // =========================================================================
     constexpr auto max_u16 = std::numeric_limits<hal::u16>::max();
     constexpr hal::u16 pump_power_ratio = (max_u16 * 3U) / 4U;  // 75%
     if (not pump_button->level()) {
+      pump_direction->level(true);  // Put pump into brake - slow decay mode
+      pump_power.duty_cycle(pump_power_ratio);
+      inflation_deadline = hal::future_deadline(*clock, inflation_time);
+    } else if (inflation_deadline > clock->uptime()) {
+      pump_direction->level(false);
       pump_power.duty_cycle(pump_power_ratio);
     } else {
+      // Both of these put the motor into slow decay mode
+      pump_direction->level(true);
       pump_power.duty_cycle(0);
     }
+#endif
   }
 }
