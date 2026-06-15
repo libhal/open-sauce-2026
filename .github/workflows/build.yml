@@ -1,0 +1,17 @@
+name: ✅ Build
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  app_check_stm32f103c8:
+    uses: libhal/ci/.github/workflows/app_builder2.yml@5.x.y
+    with:
+      dir: mimic
+      compiler_profile: hal/tc/llvm
+      platform_profile: hal/mcu/stm32f103c8
+    secrets: inherit
