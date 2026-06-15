@@ -16,6 +16,7 @@
 #include <cstdint>
 
 #include <array>
+#include <limits>
 
 #include <libhal-actuator/mx_64.hpp>
 #include <libhal-actuator/rx_64.hpp>
@@ -27,8 +28,11 @@
 #include <libhal/pwm.hpp>
 #include <libhal/units.hpp>
 
-#include <limits>
 #include <resource_list.hpp>
+
+#define KEEP_MIMIC 1
+#define KEEP_ARM 1
+#define KEEP_PUMP 1
 
 enum class angle_select : uint8_t
 {
@@ -93,20 +97,22 @@ void application()
   auto const pump_button = resources::pump_button();
   // Connected to G1 on micromod
   auto const pump_direction = resources::pump_direction();
-  // Connected to G2 on micromod
-  auto const inflate_button = resources::inflate_button();
   auto pump_power = pwm16_channel_inverter(resources::pump_power());
   auto const pump_power_frequency = resources::pump_power_frequency();
 
   hal::print(*console, "Mimic Application Starting...\n");
 
+#if KEEP_PUMP
   // ===========================================================================
   // Setup Pump
   // ===========================================================================
   pump_power_frequency->frequency(15'000);
   pump_button->configure({ .resistor = hal::pin_resistor::pull_up });
-  inflate_button->configure({ .resistor = hal::pin_resistor::pull_up });
+  constexpr auto inflation_time = 3s;
+  auto inflation_deadline = clock->uptime();
+#endif
 
+#if KEEP_ARM
   // ===========================================================================
   // Setup Robotic Arm
   // ===========================================================================
@@ -146,7 +152,9 @@ void application()
   spin_servo.led(false);
   shoulder_lead_servo.led(false);
   shoulder_opose_servo.led(false);
+#endif
 
+#if KEEP_MIMIC
   // ===========================================================================
   // Setup Mimic Controller
   // ===========================================================================
@@ -155,8 +163,10 @@ void application()
   init_ports.set(0);
   i2c_mux.set_ports(init_ports);
   hal::sensor::as5600 hall_sensor(i2c);
+#endif
 
   while (true) {
+#if KEEP_MIMIC
     using namespace std::literals;
     using namespace hal;
 
@@ -178,7 +188,9 @@ void application()
         mimic_angles[i] = hall_sensor.raw_angle();
       }
     }
+#endif
 
+#if KEEP_ARM
     // =========================================================================
     // Pass angles to mimic
     // =========================================================================
@@ -203,7 +215,9 @@ void application()
     shoulder_lead_servo.sync_position(shoulder_angle, shoulder_opose_servo);
     elbow_servo.position(elbow_angle);
     wrist_servo.position(wrist_angle);
+#endif
 
+#if KEEP_PUMP
     // =========================================================================
     // Handle Pump
     // =========================================================================
@@ -212,7 +226,8 @@ void application()
     if (not pump_button->level()) {
       pump_direction->level(true);  // Put pump into brake - slow decay mode
       pump_power.duty_cycle(pump_power_ratio);
-    } else if (not inflate_button->level()) {
+      inflation_deadline = hal::future_deadline(*clock, inflation_time);
+    } else if (inflation_deadline > clock->uptime()) {
       pump_direction->level(false);
       pump_power.duty_cycle(pump_power_ratio);
     } else {
@@ -220,5 +235,6 @@ void application()
       pump_direction->level(true);
       pump_power.duty_cycle(0);
     }
+#endif
   }
 }
