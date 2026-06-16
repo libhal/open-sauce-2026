@@ -197,4 +197,15 @@ hal::v5::strong_ptr<hal::output_pin> pump_direction()
 
   return pump_direction_pin;
 }
+
+hal::v5::optional_ptr<hal::input_pin> control_switch_ptr;
+hal::v5::strong_ptr<hal::input_pin> control_switch()
+{
+  if (not control_switch_ptr) {
+    control_switch_ptr = hal::v5::make_strong_ptr<hal::stm32f1::input_pin>(
+      driver_allocator(), 'B', 12);
+  }
+
+  return control_switch_ptr;
+}
 }  // namespace resources

@@ -17,11 +17,13 @@
 
 #include <array>
 #include <limits>
+#include <utility>
 
 #include <libhal-actuator/mx_64.hpp>
 #include <libhal-actuator/rx_64.hpp>
 #include <libhal-expander/tca9548a.hpp>
 #include <libhal-sensor/as5600.hpp>
+#include <libhal-util/map.hpp>
 #include <libhal-util/serial.hpp>
 #include <libhal-util/steady_clock.hpp>
 #include <libhal/pointers.hpp>
@@ -29,17 +31,23 @@
 #include <libhal/units.hpp>
 
 #include <resource_list.hpp>
+#include <utility>
 
 #define KEEP_MIMIC 1
 #define KEEP_ARM 1
 #define KEEP_PUMP 1
+#define EMULATED_BTN 1
 
 enum class angle_select : uint8_t
 {
   spin = 0,
   shoulder_angle = 1,
   elbow_angle = 2,
-  wrist_angle = 3
+  wrist_angle = 3,
+  t_spin = 4,
+  t_shoulder = 5,
+  t_elbow = 6,
+  t_wrist = 7
 };
 
 hal::degrees process_angle(hal::degrees p_angle, hal::degrees p_servo_center)
@@ -52,6 +60,22 @@ hal::degrees process_angle(hal::degrees p_angle, hal::degrees p_servo_center)
   p_angle = std::clamp(p_angle, 180.0f, 360.0f);
   hal::degrees angle_diff = sensor_center - p_angle;
   return p_servo_center - angle_diff;
+}
+
+hal::degrees process_throttle_angle(hal::degrees p_angle,
+                                    hal::degrees p_servo_center)
+{
+  hal::degrees const sensor_center = 180.0f;
+  auto const full_range =
+    std::make_pair(p_servo_center - 90.0f, p_servo_center + 90.0f);
+  auto const reduced_range =
+    std::make_pair(p_servo_center - 10.0f, p_servo_center + 90.0f);
+
+  p_angle = std::clamp(p_angle, 90.0f, 270.0f);
+  hal::degrees angle_diff = sensor_center - p_angle;
+  hal::degrees raw_angle = p_servo_center + angle_diff;
+
+  return hal::map(raw_angle, full_range, reduced_range);
 }
 
 void application();
@@ -97,8 +121,12 @@ void application()
   auto const pump_button = resources::pump_button();
   // Connected to G1 on micromod
   auto const pump_direction = resources::pump_direction();
+  // Connected to G4 on micromod
+  auto const control_switch = resources::control_switch();
+  control_switch->configure({ .resistor = hal::pin_resistor::pull_up });
   auto pump_power = pwm16_channel_inverter(resources::pump_power());
   auto const pump_power_frequency = resources::pump_power_frequency();
+  auto const status_led = resources::status_led();
 
   hal::print(*console, "Mimic Application Starting...\n");
 
@@ -166,6 +194,12 @@ void application()
 #endif
 
   while (true) {
+    bool mimic_controls = control_switch->level();
+    if (pump_button->level()) {
+      status_led->level(false);
+    } else {
+      status_led->level(true);
+    }
 #if KEEP_MIMIC
     using namespace std::literals;
     using namespace hal;
@@ -173,8 +207,14 @@ void application()
     // =========================================================================
     // Measure Mimic
     // =========================================================================
-    std::array<hal::degrees, 4> mimic_angles;
-    for (size_t i = 0; i < mimic_angles.size(); i++) {
+    size_t port_start;
+    if (mimic_controls) {
+      port_start = 0;
+    } else {
+      port_start = 4;
+    }
+    std::array<hal::degrees, 8> sensors_angles;
+    for (size_t i = port_start; i < (port_start + 4); i++) {
       std::bitset<8> ports{ 0x00 };
       ports.set(i);
       i2c_mux.set_ports(ports);
@@ -185,7 +225,7 @@ void application()
 
       auto magnet_status = hall_sensor.magnet_status();
       if (magnet_status.detected) {
-        mimic_angles[i] = hall_sensor.raw_angle();
+        sensors_angles[i] = hall_sensor.raw_angle();
       }
     }
 #endif
@@ -194,24 +234,42 @@ void application()
     // =========================================================================
     // Pass angles to mimic
     // =========================================================================
+    hal::degrees shoulder_angle;
+    hal::degrees elbow_angle;
+    hal::degrees wrist_angle;
+    hal::degrees spin;
 
-    auto shoulder_angle =
-      process_angle(mimic_angles[(u8)angle_select::shoulder_angle], 150.0f);
+    if (mimic_controls) {
 
-    auto elbow_angle =
-      process_angle(mimic_angles[(u8)angle_select::elbow_angle], 180.0f);
+      shoulder_angle =
+        process_angle(sensors_angles[(u8)angle_select::shoulder_angle], 150.0f);
 
-    auto wrist_angle =
-      process_angle(mimic_angles[(u8)angle_select::wrist_angle], 150.0f);
+      elbow_angle =
+        process_angle(sensors_angles[(u8)angle_select::elbow_angle], 180.0f);
 
-    hal::print<64>(
-      *console, "Spin: %.2f    ", mimic_angles[(u8)angle_select::spin]);
+      wrist_angle =
+        process_angle(sensors_angles[(u8)angle_select::wrist_angle], 150.0f);
+
+      spin = sensors_angles[(u8)angle_select::spin];
+
+    } else {
+      shoulder_angle = process_throttle_angle(
+        sensors_angles[(u8)angle_select::t_shoulder], 150.0f);
+
+      elbow_angle = process_throttle_angle(
+        sensors_angles[(u8)angle_select::t_elbow], 180.0f);
+
+      wrist_angle = process_throttle_angle(
+        sensors_angles[(u8)angle_select::t_wrist], 150.0f);
+
+      spin = sensors_angles[(u8)angle_select::t_spin];
+    }
+    hal::print<64>(*console, "Spin: %.2f    ", spin);
     hal::print<64>(*console, "Shoulder: %.2f    ", shoulder_angle);
     hal::print<64>(*console, "Elbow: %.2f    ", elbow_angle);
     hal::print<64>(*console, "Wrist: %.2f \n", wrist_angle);
 
-    spin_servo.position(mimic_angles[(u8)angle_select::spin]);
-
+    spin_servo.position(spin);
     shoulder_lead_servo.sync_position(shoulder_angle, shoulder_opose_servo);
     elbow_servo.position(elbow_angle);
     wrist_servo.position(wrist_angle);
