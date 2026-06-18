@@ -136,8 +136,8 @@ void application()
   // ===========================================================================
   pump_power_frequency->frequency(15'000);
   pump_button->configure({ .resistor = hal::pin_resistor::pull_up });
-  constexpr auto inflation_time = 3s;
-  auto inflation_deadline = clock->uptime();
+  constexpr auto deflation_time = 3s;
+  auto deflation_deadline = clock->uptime();
 #endif
 
 #if KEEP_ARM
@@ -284,8 +284,8 @@ void application()
     if (not pump_button->level()) {
       pump_direction->level(true);  // Put pump into brake - slow decay mode
       pump_power.duty_cycle(pump_power_ratio);
-      inflation_deadline = hal::future_deadline(*clock, inflation_time);
-    } else if (inflation_deadline > clock->uptime()) {
+      deflation_deadline = hal::future_deadline(*clock, deflation_time);
+    } else if (deflation_deadline > clock->uptime()) {
       pump_direction->level(false);
       pump_power.duty_cycle(pump_power_ratio);
     } else {
