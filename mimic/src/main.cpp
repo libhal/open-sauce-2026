@@ -108,6 +108,22 @@ struct pwm16_channel_inverter : public hal::pwm16_channel
   hal::v5::strong_ptr<hal::pwm16_channel> m_pwm;
 };
 
+class pump_handler
+{
+  enum class state
+  {
+    idle,
+    suck,
+    hold_vacuum,
+    pulse_suck,
+    release,
+  };
+
+  void update_pump_state(bool p_button, hal::time_duration p_time_delta)
+  {
+  }
+};
+
 void application()
 {
   using namespace std::chrono_literals;
@@ -138,6 +154,7 @@ void application()
   pump_button->configure({ .resistor = hal::pin_resistor::pull_up });
   constexpr auto deflation_time = 3s;
   auto deflation_deadline = clock->uptime();
+
 #endif
 
 #if KEEP_ARM
@@ -289,7 +306,7 @@ void application()
       pump_direction->level(false);
       pump_power.duty_cycle(pump_power_ratio);
     } else {
-      // Both of these put the motor into slow decay mode
+      // Put motor into slow decay (brake) mode
       pump_direction->level(true);
       pump_power.duty_cycle(0);
     }
