@@ -21,6 +21,7 @@
 
 #include <libhal-actuator/mx_64.hpp>
 #include <libhal-actuator/rx_64.hpp>
+#include <libhal-actuator/smart_servo/rmd/drc_v2.hpp>
 #include <libhal-expander/tca9548a.hpp>
 #include <libhal-sensor/as5600.hpp>
 #include <libhal-util/map.hpp>
@@ -127,6 +128,10 @@ void application()
   auto pump_power = pwm16_channel_inverter(resources::pump_power());
   auto const pump_power_frequency = resources::pump_power_frequency();
   auto const status_led = resources::status_led();
+  auto const can_transceiver = resources::can_transceiver();
+  auto const can_bus_manager = resources::can_bus_manager();
+  auto const can_identifier_filter = resources::can_identifier_filter();
+  auto const can_interrupt = resources::can_interrupt();
 
   hal::print(*console, "Mimic Application Starting...\n");
 
@@ -151,9 +156,9 @@ void application()
   hal::actuator::mx_64::config elbow_config = {
     .baud_rate = 57600, .id = 0, .min_angle = 90, .max_angle = 270
   };
-  hal::actuator::rx_64::config shoulder_rotate_config = {
-    .baud_rate = 57600, .id = 4, .min_angle = 0, .max_angle = 300
-  };
+  // hal::actuator::rx_64::config shoulder_rotate_config = {
+  //   .baud_rate = 57600, .id = 4, .min_angle = 0, .max_angle = 300
+  // };
   hal::actuator::rx_64::config shoulder_lead_config = {
     .baud_rate = 57600, .id = 1, .min_angle = 60, .max_angle = 240
   };
@@ -163,7 +168,8 @@ void application()
 
   auto wrist_servo = hal::actuator::rx_64(uart, wrist_config, clock);
   auto elbow_servo = hal::actuator::mx_64(uart, elbow_config, clock);
-  auto spin_servo = hal::actuator::rx_64(uart, shoulder_rotate_config, clock);
+  // auto spin_servo = hal::actuator::rx_64(uart, shoulder_rotate_config,
+  // clock);
   auto shoulder_lead_servo =
     hal::actuator::rx_64(uart, shoulder_lead_config, clock);
   auto shoulder_opose_servo =
@@ -171,15 +177,19 @@ void application()
 
   wrist_servo.torque_limit(50.0f);
   elbow_servo.torque_limit(50.0f);
-  spin_servo.torque_limit(50.0f);
+  // spin_servo.torque_limit(50.0f);
   shoulder_lead_servo.torque_limit(50.0f);
   shoulder_opose_servo.torque_limit(50.0f);
 
   wrist_servo.led(false);
   elbow_servo.led(false);
-  spin_servo.led(false);
+  // spin_servo.led(false);
   shoulder_lead_servo.led(false);
   shoulder_opose_servo.led(false);
+
+  // Setup spin servo which uses the RMD-X7
+  hal::actuator::rmd_drc_v2 spin_servo(
+    *can_transceiver, *can_identifier_filter, *clock, 6.0f, 0x140);
 #endif
 
 #if KEEP_MIMIC
@@ -269,7 +279,8 @@ void application()
     hal::print<64>(*console, "Elbow: %.2f    ", elbow_angle);
     hal::print<64>(*console, "Wrist: %.2f \n", wrist_angle);
 
-    spin_servo.position(spin);
+    // spin_servo.position(spin);
+    spin_servo.position_control(spin, 10.0f);
     shoulder_lead_servo.sync_position(shoulder_angle, shoulder_opose_servo);
     elbow_servo.position(elbow_angle);
     wrist_servo.position(wrist_angle);
