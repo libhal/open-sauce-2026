@@ -121,7 +121,29 @@ class pump_handler
 
   void update_pump_state(bool p_button, hal::time_duration p_time_delta)
   {
+    switch (m_state) {
+      case state::idle: {
+        break;
+      }
+      case state::suck: {
+        if (not p_button) {
+          m_state = state::release;
+        }
+        break;
+      }
+      case state::hold_vacuum: {
+        break;
+      }
+      case state::pulse_suck: {
+        break;
+      }
+      case state::release: {
+        break;
+      }
+    }
   }
+
+  state m_state = state::idle;
 };
 
 void application()
