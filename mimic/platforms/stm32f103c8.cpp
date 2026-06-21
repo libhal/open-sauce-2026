@@ -71,7 +71,7 @@ using namespace hal::literals;
 
 std::pmr::polymorphic_allocator<> driver_allocator()
 {
-  static std::array<hal::byte, 1024> driver_memory{};
+  static std::array<hal::byte, 1024 * 2> driver_memory{};
   static std::pmr::monotonic_buffer_resource resource(
     driver_memory.data(),
     driver_memory.size(),
@@ -209,8 +209,8 @@ hal::v5::strong_ptr<hal::input_pin> control_switch()
   return control_switch_ptr;
 }
 
-namespace {
 hal::v5::optional_ptr<hal::stm32f1::can_peripheral_manager_v2> can_manager;
+
 void initialize_can()
 {
   if (not can_manager) {
@@ -222,11 +222,10 @@ void initialize_can()
         driver_allocator(),
         100'000,
         *clock_ref,
-        std::chrono::milliseconds(1),
+        std::chrono::milliseconds(10),
         hal::stm32f1::can_pins::pb9_pb8);
   }
 }
-}  // namespace
 
 hal::v5::strong_ptr<hal::can_transceiver> can_transceiver()
 {

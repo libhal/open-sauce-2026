@@ -116,6 +116,8 @@ void application()
 
   auto const clock = resources::clock();
   auto const console = resources::console();
+  hal::print(*console, "Mimic Application Starting...\n");
+
   auto const i2c = resources::i2c();
   auto const uart = resources::uart2();
   // Connected to G0 on micromod
@@ -128,12 +130,17 @@ void application()
   auto pump_power = pwm16_channel_inverter(resources::pump_power());
   auto const pump_power_frequency = resources::pump_power_frequency();
   auto const status_led = resources::status_led();
+  hal::print(*console, "Acquired all resources prior to can...\n");
+
   auto const can_transceiver = resources::can_transceiver();
   auto const can_bus_manager = resources::can_bus_manager();
   auto const can_identifier_filter = resources::can_identifier_filter();
-  auto const can_interrupt = resources::can_interrupt();
+  hal::print(*console, "All resources acquired\n");
 
-  hal::print(*console, "Mimic Application Starting...\n");
+  // Needs to be set to this baud rate to work with the default firmware CAN
+  // baud rate.
+  can_bus_manager->baud_rate(1.0_MHz);
+  hal::print(*console, "Set can baud rate to 1 MHz\n");
 
 #if KEEP_PUMP
   // ===========================================================================
@@ -190,6 +197,7 @@ void application()
   // Setup spin servo which uses the RMD-X7
   hal::actuator::rmd_drc_v2 spin_servo(
     *can_transceiver, *can_identifier_filter, *clock, 6.0f, 0x140);
+  hal::print(*console, "Motors initialized\n");
 #endif
 
 #if KEEP_MIMIC
@@ -280,7 +288,7 @@ void application()
     hal::print<64>(*console, "Wrist: %.2f \n", wrist_angle);
 
     // spin_servo.position(spin);
-    spin_servo.position_control(spin, 10.0f);
+    spin_servo.position_control(spin, 5.0f);
     shoulder_lead_servo.sync_position(shoulder_angle, shoulder_opose_servo);
     elbow_servo.position(elbow_angle);
     wrist_servo.position(wrist_angle);
