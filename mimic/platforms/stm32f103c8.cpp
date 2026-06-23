@@ -14,7 +14,7 @@
 
 #include <libhal-arm-mcu/dwt_counter.hpp>
 #include <libhal-arm-mcu/startup.hpp>
-#include <libhal-arm-mcu/stm32f1/can.hpp>
+#include <libhal-arm-mcu/stm32f1/can2.hpp>
 #include <libhal-arm-mcu/stm32f1/clock.hpp>
 #include <libhal-arm-mcu/stm32f1/constants.hpp>
 #include <libhal-arm-mcu/stm32f1/input_pin.hpp>
@@ -61,7 +61,7 @@ hal::v5::optional_ptr<hal::output_pin> status_led_ptr;
 void initialize_platform()
 {
   using namespace hal::literals;
-  hal::set_terminate(terminate_handler);
+  std::set_terminate(terminate_handler);
   // Set the MCU to the maximum clock speed
   hal::stm32f1::maximum_speed_using_internal_oscillator();
 }
@@ -71,7 +71,7 @@ using namespace hal::literals;
 
 std::pmr::polymorphic_allocator<> driver_allocator()
 {
-  static std::array<hal::byte, 1024> driver_memory{};
+  static std::array<hal::byte, 1024 * 3> driver_memory{};
   static std::pmr::monotonic_buffer_resource resource(
     driver_memory.data(),
     driver_memory.size(),
@@ -207,5 +207,47 @@ hal::v5::strong_ptr<hal::input_pin> control_switch()
   }
 
   return control_switch_ptr;
+}
+
+hal::v5::optional_ptr<hal::stm32f1::can_peripheral_manager_v2> can_manager;
+
+void initialize_can()
+{
+  if (not can_manager) {
+    auto clock_ref = clock();
+    can_manager =
+      hal::v5::make_strong_ptr<hal::stm32f1::can_peripheral_manager_v2>(
+        driver_allocator(),
+        32,
+        driver_allocator(),
+        100'000,
+        *clock_ref,
+        std::chrono::milliseconds(10),
+        hal::stm32f1::can_pins::pb9_pb8);
+  }
+}
+
+hal::v5::strong_ptr<hal::can_transceiver> can_transceiver()
+{
+  initialize_can();
+  return hal::acquire_can_transceiver(driver_allocator(), can_manager);
+}
+
+hal::v5::strong_ptr<hal::can_bus_manager> can_bus_manager()
+{
+  initialize_can();
+  return hal::acquire_can_bus_manager(driver_allocator(), can_manager);
+}
+
+hal::v5::strong_ptr<hal::can_identifier_filter> can_identifier_filter()
+{
+  initialize_can();
+  return hal::acquire_can_identifier_filter(driver_allocator(), can_manager)[0];
+}
+
+hal::v5::strong_ptr<hal::can_interrupt> can_interrupt()
+{
+  initialize_can();
+  return hal::acquire_can_interrupt(driver_allocator(), can_manager);
 }
 }  // namespace resources

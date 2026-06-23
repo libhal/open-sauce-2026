@@ -43,6 +43,9 @@ hal::v5::strong_ptr<hal::input_pin> pump_button();
 hal::v5::strong_ptr<hal::output_pin> pump_direction();
 hal::v5::strong_ptr<hal::pwm16_channel> pump_power();
 hal::v5::strong_ptr<hal::pwm_group_manager> pump_power_frequency();
+hal::v5::strong_ptr<hal::can_transceiver> can_transceiver();
+hal::v5::strong_ptr<hal::can_bus_manager> can_bus_manager();
+hal::v5::strong_ptr<hal::can_identifier_filter> can_identifier_filter();
 }  // namespace resources
 
 // Application function is implemented by one of the .cpp files.

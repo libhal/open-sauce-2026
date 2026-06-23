@@ -39,8 +39,9 @@ add_executable(${PROJECT_NAME}
     platforms/$ENV{LIBHAL_PLATFORM}.cpp
 )
 
-target_compile_options(${PROJECT_NAME} PRIVATE -g -Wall -Wextra --save-temps)
+target_compile_options(${PROJECT_NAME} PRIVATE -g -Wall -Wextra --save-temps -fstack-usage)
 target_include_directories(${PROJECT_NAME} PUBLIC include .)
+target_link_options(${PROJECT_NAME} PRIVATE -fstack-usage)
 target_link_libraries(${PROJECT_NAME} PRIVATE
     libhal::$ENV{LIBHAL_PLATFORM_LIBRARY}
     libhal::util
