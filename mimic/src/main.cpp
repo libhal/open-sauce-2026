@@ -79,13 +79,6 @@ hal::degrees process_throttle_angle(hal::degrees p_angle,
   return hal::map(raw_angle, full_range, reduced_range);
 }
 
-void application();
-
-int main()
-{
-  application();
-}
-
 // Exists because the PWM duty is reversed for the DRV8871 in brake decay mode
 struct pwm16_channel_inverter : public hal::pwm16_channel
 {
@@ -109,10 +102,12 @@ struct pwm16_channel_inverter : public hal::pwm16_channel
   hal::v5::strong_ptr<hal::pwm16_channel> m_pwm;
 };
 
-void application()
+int main()
 {
   using namespace std::chrono_literals;
   using namespace hal::literals;
+
+  initialize_platform();
 
   auto const clock = resources::clock();
   auto const console = resources::console();
@@ -131,7 +126,6 @@ void application()
   auto const pump_power_frequency = resources::pump_power_frequency();
   auto const status_led = resources::status_led();
   hal::print(*console, "Acquired all resources prior to can...\n");
-
   auto const can_transceiver = resources::can_transceiver();
   auto const can_bus_manager = resources::can_bus_manager();
   auto const can_identifier_filter = resources::can_identifier_filter();
@@ -151,11 +145,18 @@ void application()
   constexpr auto inflation_time = 3s;
   auto inflation_deadline = clock->uptime();
 #endif
+  // ===========================================================================
+  // Setup Robotic Arm
+  // ===========================================================================
 
 #if KEEP_ARM
   // ===========================================================================
   // Setup Robotic Arm
   // ===========================================================================
+  // Setup spin servo which uses the RMD-X7
+  hal::actuator::rmd_drc_v2 spin_servo(
+    *can_transceiver, *can_identifier_filter, *clock, 6.0f, 0x141);
+  hal::print(*console, "RMD DRC v2 initialized\n");
 
   hal::actuator::rx_64::config wrist_config = {
     .baud_rate = 57600, .id = 3, .min_angle = 60, .max_angle = 240
@@ -182,11 +183,23 @@ void application()
   auto shoulder_opose_servo =
     hal::actuator::rx_64(uart, shoulder_opose_config, clock);
 
-  wrist_servo.torque_limit(50.0f);
-  elbow_servo.torque_limit(50.0f);
+  wrist_servo.torque_limit(80.0f);
+  hal::delay(*clock, 10ms);
+  wrist_servo.speed(10.0f);
+  hal::delay(*clock, 10ms);
+  elbow_servo.torque_limit(80.0f);
+  hal::delay(*clock, 10ms);
+  elbow_servo.speed(10.0f);
+  hal::delay(*clock, 10ms);
   // spin_servo.torque_limit(50.0f);
-  shoulder_lead_servo.torque_limit(50.0f);
-  shoulder_opose_servo.torque_limit(50.0f);
+  shoulder_lead_servo.torque_limit(80.0f);
+  hal::delay(*clock, 10ms);
+  shoulder_lead_servo.speed(10.0f);
+  hal::delay(*clock, 10ms);
+  shoulder_opose_servo.torque_limit(80.0f);
+  hal::delay(*clock, 10ms);
+  shoulder_opose_servo.speed(10.0f);
+  hal::delay(*clock, 10ms);
 
   wrist_servo.led(false);
   elbow_servo.led(false);
@@ -194,9 +207,6 @@ void application()
   shoulder_lead_servo.led(false);
   shoulder_opose_servo.led(false);
 
-  // Setup spin servo which uses the RMD-X7
-  hal::actuator::rmd_drc_v2 spin_servo(
-    *can_transceiver, *can_identifier_filter, *clock, 6.0f, 0x140);
   hal::print(*console, "Motors initialized\n");
 #endif
 
@@ -246,15 +256,13 @@ void application()
         sensors_angles[i] = hall_sensor.raw_angle();
       }
     }
-#endif
 
-#if KEEP_ARM
     // =========================================================================
     // Pass angles to mimic
     // =========================================================================
-    hal::degrees shoulder_angle;
-    hal::degrees elbow_angle;
-    hal::degrees wrist_angle;
+    [[maybe_unused]] hal::degrees shoulder_angle;
+    [[maybe_unused]] hal::degrees elbow_angle;
+    [[maybe_unused]] hal::degrees wrist_angle;
     hal::degrees spin;
 
     if (mimic_controls) {
@@ -282,16 +290,21 @@ void application()
 
       spin = sensors_angles[(u8)angle_select::t_spin];
     }
+    shoulder_angle = std::clamp(shoulder_angle, 120.0f, 360.0f);
     hal::print<64>(*console, "Spin: %.2f    ", spin);
     hal::print<64>(*console, "Shoulder: %.2f    ", shoulder_angle);
     hal::print<64>(*console, "Elbow: %.2f    ", elbow_angle);
     hal::print<64>(*console, "Wrist: %.2f \n", wrist_angle);
+#endif
 
-    // spin_servo.position(spin);
-    spin_servo.position_control(spin, 5.0f);
-    shoulder_lead_servo.sync_position(shoulder_angle, shoulder_opose_servo);
-    elbow_servo.position(elbow_angle);
+#if KEEP_ARM
+    spin_servo.position_control(spin, 10.0f);
     wrist_servo.position(wrist_angle);
+    hal::delay(*clock, 50ms);
+    elbow_servo.position(elbow_angle);
+    hal::delay(*clock, 50ms);
+    shoulder_lead_servo.sync_position(shoulder_angle, shoulder_opose_servo);
+    hal::delay(*clock, 50ms);
 #endif
 
 #if KEEP_PUMP
@@ -313,5 +326,16 @@ void application()
       pump_power.duty_cycle(0);
     }
 #endif
+  }
+}
+
+extern "C"
+{
+  [[gnu::noreturn]] void _exit(int p_status)
+  {
+    [[maybe_unused]] int volatile status = p_status;
+    while (true) {
+      continue;
+    }
   }
 }

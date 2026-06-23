@@ -61,7 +61,7 @@ hal::v5::optional_ptr<hal::output_pin> status_led_ptr;
 void initialize_platform()
 {
   using namespace hal::literals;
-  hal::set_terminate(terminate_handler);
+  std::set_terminate(terminate_handler);
   // Set the MCU to the maximum clock speed
   hal::stm32f1::maximum_speed_using_internal_oscillator();
 }
@@ -71,7 +71,7 @@ using namespace hal::literals;
 
 std::pmr::polymorphic_allocator<> driver_allocator()
 {
-  static std::array<hal::byte, 1024 * 2> driver_memory{};
+  static std::array<hal::byte, 1024 * 3> driver_memory{};
   static std::pmr::monotonic_buffer_resource resource(
     driver_memory.data(),
     driver_memory.size(),
