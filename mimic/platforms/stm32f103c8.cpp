@@ -141,61 +141,37 @@ hal::v5::strong_ptr<hal::i2c> i2c()
                                                      *clock_ptr);
 }
 
-auto& timer1()
-{
-  static hal::stm32f1::advanced_timer<hal::stm32f1::peripheral::timer1>
-    timer1{};
-  return timer1;
-}
-
-hal::v5::optional_ptr<hal::pwm16_channel> pwm16_channel_ptr;
-hal::v5::strong_ptr<hal::pwm16_channel> pump_power()
-{
-  if (pwm16_channel_ptr) {
-    return pwm16_channel_ptr;
-  }
-
-  auto pwm = timer1().acquire_pwm16_channel(hal::stm32f1::timer1_pin::pa8);
-  using PwmType = decltype(pwm);
-  pwm16_channel_ptr =
-    hal::v5::make_strong_ptr<PwmType>(driver_allocator(), std::move(pwm));
-  return pwm16_channel_ptr;
-}
-
-hal::v5::optional_ptr<hal::pwm_group_manager> pwm_group_manager_ptr;
-hal::v5::strong_ptr<hal::pwm_group_manager> pump_power_frequency()
-{
-  if (pwm_group_manager_ptr) {
-    return pwm_group_manager_ptr;
-  }
-
-  auto timer_pwm_frequency = timer1().acquire_pwm_group_frequency();
-  pwm_group_manager_ptr =
-    hal::v5::make_strong_ptr<decltype(timer_pwm_frequency)>(
-      driver_allocator(), std::move(timer_pwm_frequency));
-  return pwm_group_manager_ptr;
-}
-
 hal::v5::optional_ptr<hal::input_pin> pump_button_ptr;
 hal::v5::strong_ptr<hal::input_pin> pump_button()
 {
   if (not pump_button_ptr) {
     pump_button_ptr = hal::v5::make_strong_ptr<hal::stm32f1::input_pin>(
-      driver_allocator(), 'A', 0);
+      driver_allocator(), 'A', 15);  // G1
   }
 
   return pump_button_ptr;
 }
 
-hal::v5::optional_ptr<hal::output_pin> pump_direction_pin;
-hal::v5::strong_ptr<hal::output_pin> pump_direction()
+hal::v5::optional_ptr<hal::output_pin> pump_power_ptr;
+hal::v5::strong_ptr<hal::output_pin> pump_power()
 {
-  if (not pump_direction_pin) {
-    pump_direction_pin = hal::v5::make_strong_ptr<hal::stm32f1::output_pin>(
-      driver_allocator(), 'A', 15);
+  if (not pump_power_ptr) {
+    pump_power_ptr = hal::v5::make_strong_ptr<hal::stm32f1::output_pin>(
+      driver_allocator(), 'B', 3);  // G2
   }
 
-  return pump_direction_pin;
+  return pump_power_ptr;
+}
+
+hal::v5::optional_ptr<hal::output_pin> valve_control_ptr;
+hal::v5::strong_ptr<hal::output_pin> valve_control()
+{
+  if (not valve_control_ptr) {
+    valve_control_ptr = hal::v5::make_strong_ptr<hal::stm32f1::output_pin>(
+      driver_allocator(), 'B', 4);  // G3
+  }
+
+  return valve_control_ptr;
 }
 
 hal::v5::optional_ptr<hal::input_pin> control_switch_ptr;
@@ -203,7 +179,7 @@ hal::v5::strong_ptr<hal::input_pin> control_switch()
 {
   if (not control_switch_ptr) {
     control_switch_ptr = hal::v5::make_strong_ptr<hal::stm32f1::input_pin>(
-      driver_allocator(), 'B', 12);
+      driver_allocator(), 'B', 12);  // G4
   }
 
   return control_switch_ptr;
