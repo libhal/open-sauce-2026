@@ -34,8 +34,8 @@
 
 #include <resource_list.hpp>
 
-#define KEEP_MIMIC false
-#define KEEP_ARM false
+#define KEEP_MIMIC true
+#define KEEP_ARM true
 #define KEEP_PUMP true
 
 struct angle_select
@@ -121,7 +121,7 @@ int main()
   auto const pump_power = resources::pump_power();
   pump_button.configure({ .resistor = hal::pin_resistor::pull_up });
   // Connected to G2 on micromod
-  auto const valve_control = resources::valve_control();
+  auto const valve_open = resources::valve_control();
   // Connected to G4 on micromod
   auto const control_switch = resources::control_switch();
   control_switch->configure({ .resistor = hal::pin_resistor::pull_up });
@@ -142,9 +142,9 @@ int main()
   // Setup Pump
   // ===========================================================================
   pump_power->level(false);
-  valve_control->level(false);
-  // constexpr auto inflation_time = 3s;
-  // auto inflation_deadline = clock->uptime();
+  valve_open->level(false);
+  constexpr auto inflation_time = 4s;
+  auto inflation_deadline = clock->uptime();
 #endif
   // ===========================================================================
   // Setup Robotic Arm
@@ -307,8 +307,19 @@ int main()
     // =========================================================================
     // Handle Pump
     // =========================================================================
-    pump_power->level(pump_button.level());
-    valve_control->level(not pump_button.level());
+    if (pump_button.level()) {
+      inflation_deadline = hal::future_deadline(*clock, inflation_time);
+      pump_power->level(true);
+      valve_open->level(false);
+    } else {
+      pump_power->level(false);
+      if (inflation_deadline > clock->uptime()) {
+        valve_open->level(true);
+      } else {
+        valve_open->level(false);
+      }
+    }
+
 #endif
     hal::print(*console, "\n");
   }
