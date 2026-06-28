@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <cinttypes>
 #include <cstddef>
 #include <cstdint>
 
 #include <array>
-#include <limits>
 #include <utility>
 
 #include <libhal-actuator/mx_64.hpp>
@@ -27,28 +27,30 @@
 #include <libhal-util/map.hpp>
 #include <libhal-util/serial.hpp>
 #include <libhal-util/steady_clock.hpp>
+#include <libhal/input_pin.hpp>
 #include <libhal/pointers.hpp>
 #include <libhal/pwm.hpp>
 #include <libhal/units.hpp>
 
 #include <resource_list.hpp>
-#include <utility>
 
-#define KEEP_MIMIC 1
-#define KEEP_ARM 1
-#define KEEP_PUMP 1
-#define EMULATED_BTN 1
+#define KEEP_MIMIC true
+#define KEEP_ARM true
+#define KEEP_PUMP true
 
-enum class angle_select : uint8_t
+struct angle_select
 {
-  spin = 0,
-  shoulder_angle = 1,
-  elbow_angle = 2,
-  wrist_angle = 3,
-  t_spin = 4,
-  t_shoulder = 5,
-  t_elbow = 6,
-  t_wrist = 7
+  enum angle_names : uint8_t
+  {
+    spin = 0,
+    shoulder_angle = 1,
+    elbow_angle = 2,
+    wrist_angle = 3,
+    t_spin = 4,
+    t_shoulder = 5,
+    t_elbow = 6,
+    t_wrist = 7
+  };
 };
 
 hal::degrees process_angle(hal::degrees p_angle, hal::degrees p_servo_center)
@@ -79,27 +81,24 @@ hal::degrees process_throttle_angle(hal::degrees p_angle,
   return hal::map(raw_angle, full_range, reduced_range);
 }
 
-// Exists because the PWM duty is reversed for the DRV8871 in brake decay mode
-struct pwm16_channel_inverter : public hal::pwm16_channel
+struct input_pin_inverter : public hal::input_pin
 {
-  pwm16_channel_inverter(hal::v5::strong_ptr<hal::pwm16_channel> p_pwm)
-    : m_pwm(p_pwm)
+  input_pin_inverter(hal::strong_ptr<hal::input_pin> const& p_input_pin)
+    : m_input_pin(p_input_pin)
   {
   }
 
-  hal::u32 driver_frequency() override
+  void driver_configure(hal::input_pin::settings const& p_settings)
   {
-    return m_pwm->frequency();
+    m_input_pin->configure(p_settings);
   }
 
-  void driver_duty_cycle(hal::u16 p_duty_cycle) override
+  bool driver_level()
   {
-    constexpr auto max_u16 = std::numeric_limits<hal::u16>::max();
-    auto const inverted_pwm = max_u16 - p_duty_cycle;
-    m_pwm->duty_cycle(inverted_pwm);
+    return !m_input_pin->level();
   }
 
-  hal::v5::strong_ptr<hal::pwm16_channel> m_pwm;
+  hal::strong_ptr<hal::input_pin> m_input_pin;
 };
 
 int main()
@@ -116,14 +115,16 @@ int main()
   auto const i2c = resources::i2c();
   auto const uart = resources::uart2();
   // Connected to G0 on micromod
-  auto const pump_button = resources::pump_button();
+  auto const pump_button_inverted = resources::pump_button();
+  input_pin_inverter pump_button(pump_button_inverted);
   // Connected to G1 on micromod
-  auto const pump_direction = resources::pump_direction();
+  auto const pump_power = resources::pump_power();
+  pump_button.configure({ .resistor = hal::pin_resistor::pull_up });
+  // Connected to G2 on micromod
+  auto const valve_open = resources::valve_control();
   // Connected to G4 on micromod
   auto const control_switch = resources::control_switch();
   control_switch->configure({ .resistor = hal::pin_resistor::pull_up });
-  auto pump_power = pwm16_channel_inverter(resources::pump_power());
-  auto const pump_power_frequency = resources::pump_power_frequency();
   auto const status_led = resources::status_led();
   hal::print(*console, "Acquired all resources prior to can...\n");
   auto const can_transceiver = resources::can_transceiver();
@@ -140,9 +141,9 @@ int main()
   // ===========================================================================
   // Setup Pump
   // ===========================================================================
-  pump_power_frequency->frequency(15'000);
-  pump_button->configure({ .resistor = hal::pin_resistor::pull_up });
-  constexpr auto inflation_time = 3s;
+  pump_power->level(false);
+  valve_open->level(false);
+  constexpr auto inflation_time = 4s;
   auto inflation_deadline = clock->uptime();
 #endif
   // ===========================================================================
@@ -176,34 +177,30 @@ int main()
 
   auto wrist_servo = hal::actuator::rx_64(uart, wrist_config, clock);
   auto elbow_servo = hal::actuator::mx_64(uart, elbow_config, clock);
-  // auto spin_servo = hal::actuator::rx_64(uart, shoulder_rotate_config,
-  // clock);
   auto shoulder_lead_servo =
     hal::actuator::rx_64(uart, shoulder_lead_config, clock);
   auto shoulder_opose_servo =
     hal::actuator::rx_64(uart, shoulder_opose_config, clock);
 
-  wrist_servo.torque_limit(80.0f);
+  wrist_servo.torque_limit(100.0f);
   hal::delay(*clock, 10ms);
   wrist_servo.speed(10.0f);
   hal::delay(*clock, 10ms);
-  elbow_servo.torque_limit(80.0f);
+  elbow_servo.torque_limit(100.0f);
   hal::delay(*clock, 10ms);
   elbow_servo.speed(10.0f);
   hal::delay(*clock, 10ms);
-  // spin_servo.torque_limit(50.0f);
-  shoulder_lead_servo.torque_limit(80.0f);
+  shoulder_lead_servo.torque_limit(100.0f);
   hal::delay(*clock, 10ms);
   shoulder_lead_servo.speed(10.0f);
   hal::delay(*clock, 10ms);
-  shoulder_opose_servo.torque_limit(80.0f);
-  hal::delay(*clock, 10ms);
-  shoulder_opose_servo.speed(10.0f);
-  hal::delay(*clock, 10ms);
+  // shoulder_opose_servo.torque_limit(80.0f);
+  // hal::delay(*clock, 10ms);
+  // shoulder_opose_servo.speed(10.0f);
+  // hal::delay(*clock, 10ms);
 
   wrist_servo.led(false);
   elbow_servo.led(false);
-  // spin_servo.led(false);
   shoulder_lead_servo.led(false);
   shoulder_opose_servo.led(false);
 
@@ -222,16 +219,12 @@ int main()
 #endif
 
   while (true) {
-    bool mimic_controls = control_switch->level();
-    if (pump_button->level()) {
-      status_led->level(false);
-    } else {
-      status_led->level(true);
-    }
+    status_led->level(pump_button.level());
 #if KEEP_MIMIC
     using namespace std::literals;
     using namespace hal;
 
+    bool const mimic_controls = control_switch->level();
     // =========================================================================
     // Measure Mimic
     // =========================================================================
@@ -268,64 +261,67 @@ int main()
     if (mimic_controls) {
 
       shoulder_angle =
-        process_angle(sensors_angles[(u8)angle_select::shoulder_angle], 150.0f);
+        process_angle(sensors_angles[angle_select::shoulder_angle], 150.0f);
 
       elbow_angle =
-        process_angle(sensors_angles[(u8)angle_select::elbow_angle], 180.0f);
+        process_angle(sensors_angles[angle_select::elbow_angle], 180.0f);
 
       wrist_angle =
-        process_angle(sensors_angles[(u8)angle_select::wrist_angle], 150.0f);
+        process_angle(sensors_angles[angle_select::wrist_angle], 150.0f);
 
-      spin = sensors_angles[(u8)angle_select::spin];
+      spin = sensors_angles[angle_select::spin];
 
     } else {
       shoulder_angle = process_throttle_angle(
-        sensors_angles[(u8)angle_select::t_shoulder], 150.0f);
+        sensors_angles[angle_select::t_shoulder], 150.0f);
 
-      elbow_angle = process_throttle_angle(
-        sensors_angles[(u8)angle_select::t_elbow], 180.0f);
+      elbow_angle =
+        process_throttle_angle(sensors_angles[angle_select::t_elbow], 180.0f);
 
-      wrist_angle = process_throttle_angle(
-        sensors_angles[(u8)angle_select::t_wrist], 150.0f);
+      wrist_angle =
+        process_throttle_angle(sensors_angles[angle_select::t_wrist], 150.0f);
 
-      spin = sensors_angles[(u8)angle_select::t_spin];
+      spin = sensors_angles[angle_select::t_spin];
     }
     shoulder_angle = std::clamp(shoulder_angle, 120.0f, 360.0f);
-    hal::print<64>(*console, "Spin: %.2f    ", spin);
+    hal::print(*console, "Mimic: [");
+    hal::print<64>(*console, "Spin: %.2f  ", spin);
     hal::print<64>(*console, "Shoulder: %.2f    ", shoulder_angle);
     hal::print<64>(*console, "Elbow: %.2f    ", elbow_angle);
-    hal::print<64>(*console, "Wrist: %.2f \n", wrist_angle);
+    hal::print<64>(*console, "Wrist: %.2f ", wrist_angle);
+    hal::print(*console, "]");
 #endif
 
 #if KEEP_ARM
     spin_servo.position_control(spin, 10.0f);
     wrist_servo.position(wrist_angle);
-    hal::delay(*clock, 50ms);
     elbow_servo.position(elbow_angle);
-    hal::delay(*clock, 50ms);
-    shoulder_lead_servo.sync_position(shoulder_angle, shoulder_opose_servo);
-    hal::delay(*clock, 50ms);
+    shoulder_lead_servo.position(shoulder_angle);
+    hal::print<64>(*console,
+                   "[W: %" PRIu8 " S: %" PRIu8 "]",
+                   wrist_servo.last_error_code(),
+                   shoulder_lead_servo.last_error_code());
 #endif
 
 #if KEEP_PUMP
     // =========================================================================
     // Handle Pump
     // =========================================================================
-    constexpr auto max_u16 = std::numeric_limits<hal::u16>::max();
-    constexpr hal::u16 pump_power_ratio = (max_u16 * 3U) / 4U;  // 75%
-    if (not pump_button->level()) {
-      pump_direction->level(true);  // Put pump into brake - slow decay mode
-      pump_power.duty_cycle(pump_power_ratio);
+    if (pump_button.level()) {
       inflation_deadline = hal::future_deadline(*clock, inflation_time);
-    } else if (inflation_deadline > clock->uptime()) {
-      pump_direction->level(false);
-      pump_power.duty_cycle(pump_power_ratio);
+      pump_power->level(true);
+      valve_open->level(false);
     } else {
-      // Both of these put the motor into slow decay mode
-      pump_direction->level(true);
-      pump_power.duty_cycle(0);
+      pump_power->level(false);
+      if (inflation_deadline > clock->uptime()) {
+        valve_open->level(true);
+      } else {
+        valve_open->level(false);
+      }
     }
+
 #endif
+    hal::print(*console, "\n");
   }
 }
 

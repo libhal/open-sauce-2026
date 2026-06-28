@@ -26,4 +26,4 @@ class demos(ConanFile):
         bootstrap.module.add_demo_requirements(self)
         self.requires("libhal-expander/[^1.5.0]")
         self.requires("libhal-sensor/[^1.2.0]")
-        self.requires("libhal-actuator/[^1.5.0]")
+        self.requires("libhal-actuator/[^1.6.0]")
