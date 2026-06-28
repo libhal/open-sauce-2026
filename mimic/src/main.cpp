@@ -17,8 +17,6 @@
 #include <cstdint>
 
 #include <array>
-#include <libhal/input_pin.hpp>
-#include <limits>
 #include <utility>
 
 #include <libhal-actuator/mx_64.hpp>
@@ -29,17 +27,16 @@
 #include <libhal-util/map.hpp>
 #include <libhal-util/serial.hpp>
 #include <libhal-util/steady_clock.hpp>
+#include <libhal/input_pin.hpp>
 #include <libhal/pointers.hpp>
 #include <libhal/pwm.hpp>
 #include <libhal/units.hpp>
 
 #include <resource_list.hpp>
-#include <utility>
 
-#define KEEP_MIMIC 1
-#define KEEP_ARM 1
-#define KEEP_PUMP 1
-#define EMULATED_BTN 1
+#define KEEP_MIMIC false
+#define KEEP_ARM false
+#define KEEP_PUMP true
 
 struct angle_select
 {
@@ -117,14 +114,13 @@ int main()
 
   auto const i2c = resources::i2c();
   auto const uart = resources::uart2();
-  // Connected to G1 on micromod
+  // Connected to G0 on micromod
   auto const pump_button_inverted = resources::pump_button();
   input_pin_inverter pump_button(pump_button_inverted);
-
-  // Connected to G2 on micromod
+  // Connected to G1 on micromod
   auto const pump_power = resources::pump_power();
   pump_button.configure({ .resistor = hal::pin_resistor::pull_up });
-  // Connected to G3 on micromod
+  // Connected to G2 on micromod
   auto const valve_control = resources::valve_control();
   // Connected to G4 on micromod
   auto const control_switch = resources::control_switch();
@@ -223,16 +219,12 @@ int main()
 #endif
 
   while (true) {
-    bool mimic_controls = control_switch->level();
-    if (pump_button.level()) {
-      status_led->level(false);
-    } else {
-      status_led->level(true);
-    }
+    status_led->level(pump_button.level());
 #if KEEP_MIMIC
     using namespace std::literals;
     using namespace hal;
 
+    bool const mimic_controls = control_switch->level();
     // =========================================================================
     // Measure Mimic
     // =========================================================================
@@ -315,13 +307,8 @@ int main()
     // =========================================================================
     // Handle Pump
     // =========================================================================
-    if (pump_button.level()) {
-      pump_power->level(true);
-      valve_control->level(false);
-    } else {
-      pump_power->level(false);
-      valve_control->level(true);
-    }
+    pump_power->level(pump_button.level());
+    valve_control->level(not pump_button.level());
 #endif
     hal::print(*console, "\n");
   }
