@@ -171,6 +171,7 @@ int main()
     .id = 3,
     .min_angle = 60,
     .max_angle = 240,
+    .response_timeout = 200ms
   };
   constexpr hal::actuator::dynamixel_servo_protocol_1::config elbow_config = {
     .servo = hal::actuator::dynamixel_servo::mx,
@@ -227,7 +228,6 @@ int main()
   shoulder_lead_servo.speed(30.0f);
   hal::delay(*clock, 10ms);
 
-  hal::delay(*clock, 10ms);
   shoulder_support_servo.torque_limit(100.0f);
   hal::delay(*clock, 10ms);
   shoulder_support_servo.torque_enable(false);
@@ -252,8 +252,7 @@ int main()
       hal::delay(*clock, 10ms);
       shoulder_support_servo.queue_position(150.0f);
       hal::delay(*clock, 10ms);
-      hal::actuator::dynamixel_servo_protocol_1::execute_registered_action(
-        0xFE, uart);
+      hal::actuator::dynamixel_servo_protocol_1::broadcast_execute_action(uart);
       hal::print(*console, "Servos in postion for 4 seconds\n");
       hal::delay(*clock, 4s);
       break;
@@ -383,47 +382,48 @@ int main()
     spin_servo.position_control(spin, 10.0f);
 
     try {
-      for (int i = 0; i < 5; i++) {
-        wrist_servo.queue_position(wrist_angle);
-        hal::delay(*clock, 50ms);
+      elbow_servo.queue_position(elbow_angle);
+      hal::delay(*clock, 10ms);
 
-        elbow_servo.queue_position(elbow_angle);
-        hal::delay(*clock, 50ms);
+      wrist_servo.queue_position(wrist_angle);
+      hal::delay(*clock, 10ms);
 
-        // shoulder_lead_servo.queue_position(shoulder_angle);
-        // hal::delay(*clock, 50ms);
+      // shoulder_lead_servo.queue_position(shoulder_angle);
+      // hal::delay(*clock, 50ms);
 
-        // if (shoulder_lead_servo.last_error_code() & (1U << 5U)) {
-        //   shoulder_lead_servo.torque_enable(false);
-        //   hal::delay(*clock, 50ms);
-        //   shoulder_lead_servo.torque_limit(100.0f);
-        //   hal::delay(*clock, 50ms);
-        //   shoulder_lead_servo.torque_enable(true);
-        //   hal::delay(*clock, 50ms);
-        //   shoulder_lead_servo.queue_position(shoulder_angle);
-        // }
+      // if (shoulder_lead_servo.last_error_code() & (1U << 5U)) {
+      //   shoulder_lead_servo.torque_enable(false);
+      //   hal::delay(*clock, 50ms);
+      //   shoulder_lead_servo.torque_limit(100.0f);
+      //   hal::delay(*clock, 50ms);
+      //   shoulder_lead_servo.torque_enable(true);
+      //   hal::delay(*clock, 50ms);
+      //   shoulder_lead_servo.queue_position(shoulder_angle);
+      // }
 
-        // auto reverse_angle = 300 - shoulder_angle;
-        // shoulder_support_servo.queue_position(reverse_angle);
-        // hal::delay(*clock, 10ms);
+      // auto reverse_angle = 300 - shoulder_angle;
+      // shoulder_support_servo.queue_position(reverse_angle);
+      // hal::delay(*clock, 10ms);
 
-        // if (shoulder_support_servo.last_error_code() & (1U << 5U)) {
-        //   shoulder_support_servo.torque_enable(false);
-        //   hal::delay(*clock, 10ms);
-        //   shoulder_support_servo.torque_limit(100.0f);
-        //   hal::delay(*clock, 10ms);
-        //   shoulder_support_servo.torque_enable(true);
-        //   hal::delay(*clock, 10ms);
-        //   shoulder_support_servo.queue_position(reverse_angle);
-        // }
+      // if (shoulder_support_servo.last_error_code() & (1U << 5U)) {
+      //   shoulder_support_servo.torque_enable(false);
+      //   hal::delay(*clock, 10ms);
+      //   shoulder_support_servo.torque_limit(100.0f);
+      //   hal::delay(*clock, 10ms);
+      //   shoulder_support_servo.torque_enable(true);
+      //   hal::delay(*clock, 10ms);
+      //   shoulder_support_servo.queue_position(reverse_angle);
+      // }
 
-        hal::delay(*clock, 100ms);
+      hal::delay(*clock, 10ms);
 
-        wrist_servo.execute_action();
-        elbow_servo.execute_action();
-        // actuator::dynamixel_servo_protocol_1::execute_registered_action(0xFE,
-        //                                                                 uart);
-      }
+      // wrist_servo.execute_action();
+      // hal::delay(*clock, 10ms);
+      // elbow_servo.execute_action();
+      // hal::delay(*clock, 10ms);
+
+      actuator::dynamixel_servo_protocol_1::broadcast_execute_action(uart);
+      hal::delay(*clock, 10ms);
 
     } catch (hal::timed_out const&) {
       hal::print(*console, "❌  ⏰\n");
