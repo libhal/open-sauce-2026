@@ -30,8 +30,10 @@
 #include <libhal/input_pin.hpp>
 #include <libhal/pointers.hpp>
 #include <libhal/pwm.hpp>
+#include <libhal/steady_clock.hpp>
 #include <libhal/units.hpp>
 
+#include <dynamixel.hpp>
 #include <resource_list.hpp>
 
 #define KEEP_MIMIC true
@@ -101,6 +103,45 @@ struct input_pin_inverter : public hal::input_pin
   hal::strong_ptr<hal::input_pin> m_input_pin;
 };
 
+struct shoulder_motor
+{
+  constexpr static hal::actuator::rx_64::config shoulder_lead_config = {
+    .baud_rate = 57600,
+    .id = 1,
+    .min_angle = 60,
+    .max_angle = 240
+  };
+  constexpr static hal::actuator::rx_64::config shoulder_opposite_config = {
+    .baud_rate = 57600,
+    .id = 2,
+    .min_angle = 60,
+    .max_angle = 240
+  };
+  shoulder_motor(hal::strong_ptr<hal::serial> p_rs485,
+                 hal::strong_ptr<hal::steady_clock> p_clock)
+    : m_shoulder_motor_1(p_rs485, shoulder_lead_config, p_clock)
+    , m_shoulder_motor_2(p_rs485, shoulder_opposite_config, p_clock)
+  {
+  }
+
+  void position(hal::degrees p_angle)
+  {
+    auto const clamped_angle = std::clamp(
+      p_angle, shoulder_lead_config.min_angle, shoulder_lead_config.max_angle);
+    auto const reversed_angle = shoulder_lead_config.max_angle - clamped_angle;
+
+    if (m_lead_motor_active) {
+      m_shoulder_motor_1.position(clamped_angle);
+    } else {
+      m_shoulder_motor_2.position(reversed_angle);
+    }
+  }
+
+  hal::actuator::rx_64 m_shoulder_motor_1;
+  hal::actuator::rx_64 m_shoulder_motor_2;
+  bool m_lead_motor_active = false;
+};
+
 int main()
 {
   using namespace std::chrono_literals;
@@ -159,50 +200,59 @@ int main()
     *can_transceiver, *can_identifier_filter, *clock, 6.0f, 0x141);
   hal::print(*console, "RMD DRC v2 initialized\n");
 
-  hal::actuator::rx_64::config wrist_config = {
+  constexpr hal::actuator::rx_64::config wrist_config = {
     .baud_rate = 57600, .id = 3, .min_angle = 60, .max_angle = 240
   };
-  hal::actuator::mx_64::config elbow_config = {
+  constexpr hal::actuator::mx_64::config elbow_config = {
     .baud_rate = 57600, .id = 0, .min_angle = 90, .max_angle = 270
   };
-  // hal::actuator::rx_64::config shoulder_rotate_config = {
-  //   .baud_rate = 57600, .id = 4, .min_angle = 0, .max_angle = 300
-  // };
-  hal::actuator::rx_64::config shoulder_lead_config = {
+  constexpr hal::actuator::rx_64::config shoulder_lead_config = {
     .baud_rate = 57600, .id = 1, .min_angle = 60, .max_angle = 240
   };
-  hal::actuator::rx_64::config shoulder_opose_config = {
+  constexpr hal::actuator::rx_64::config shoulder_opposite_config = {
     .baud_rate = 57600, .id = 2, .min_angle = 60, .max_angle = 240
   };
-
   auto wrist_servo = hal::actuator::rx_64(uart, wrist_config, clock);
   auto elbow_servo = hal::actuator::mx_64(uart, elbow_config, clock);
-  auto shoulder_lead_servo =
+
+  auto shoulder_motor_1 =
     hal::actuator::rx_64(uart, shoulder_lead_config, clock);
-  auto shoulder_opose_servo =
-    hal::actuator::rx_64(uart, shoulder_opose_config, clock);
+  auto shoulder_motor_2 =
+    hal::actuator::rx_64(uart, shoulder_opposite_config, clock);
+  bool leading_motor_active = true;
 
   wrist_servo.torque_limit(100.0f);
   hal::delay(*clock, 10ms);
-  wrist_servo.speed(10.0f);
+  wrist_servo.torque_enable(true);
   hal::delay(*clock, 10ms);
+  wrist_servo.speed(30.0f);
+  hal::delay(*clock, 10ms);
+
   elbow_servo.torque_limit(100.0f);
   hal::delay(*clock, 10ms);
-  elbow_servo.speed(10.0f);
+  elbow_servo.torque_enable(true);
   hal::delay(*clock, 10ms);
-  shoulder_lead_servo.torque_limit(100.0f);
+  elbow_servo.speed(20.0f);
   hal::delay(*clock, 10ms);
-  shoulder_lead_servo.speed(10.0f);
+
+  shoulder_motor_1.torque_limit(100.0f);
   hal::delay(*clock, 10ms);
-  // shoulder_opose_servo.torque_limit(80.0f);
-  // hal::delay(*clock, 10ms);
-  // shoulder_opose_servo.speed(10.0f);
-  // hal::delay(*clock, 10ms);
+  shoulder_motor_1.torque_enable(true);
+  hal::delay(*clock, 10ms);
+  shoulder_motor_1.speed(30.0f);
+  hal::delay(*clock, 10ms);
+
+  shoulder_motor_2.torque_limit(0.0f);  // keep off initially
+  hal::delay(*clock, 10ms);
+  shoulder_motor_2.torque_enable(false);  // keep off initially
+  hal::delay(*clock, 10ms);
+  shoulder_motor_2.speed(30.0f);
+  hal::delay(*clock, 10ms);
 
   wrist_servo.led(false);
   elbow_servo.led(false);
-  shoulder_lead_servo.led(false);
-  shoulder_opose_servo.led(false);
+  shoulder_motor_1.led(false);
+  shoulder_motor_2.led(false);
 
   hal::print(*console, "Motors initialized\n");
 #endif
@@ -293,14 +343,70 @@ int main()
 #endif
 
 #if KEEP_ARM
+
+    auto print_status = [&]() {
+      hal::print<64>(*console,
+                     "[W: %" PRIu8 " S1: %" PRIu8 " S2: %" PRIu8 "]",
+                     wrist_servo.last_error_code(),
+                     shoulder_motor_1.last_error_code(),
+                     shoulder_motor_2.last_error_code());
+    };
+
     spin_servo.position_control(spin, 10.0f);
+    hal::delay(*clock, 50ms);
     wrist_servo.position(wrist_angle);
+    hal::delay(*clock, 50ms);
     elbow_servo.position(elbow_angle);
-    shoulder_lead_servo.position(shoulder_angle);
-    hal::print<64>(*console,
-                   "[W: %" PRIu8 " S: %" PRIu8 "]",
-                   wrist_servo.last_error_code(),
-                   shoulder_lead_servo.last_error_code());
+    hal::delay(*clock, 50ms);
+
+    auto const reversed_angle = 300.0f - shoulder_angle;
+    if (leading_motor_active) {
+      shoulder_motor_1.position(shoulder_angle);
+      print_status();
+      if (shoulder_motor_1.last_error_code() & (1 << 5)) {  // over-torque
+        // Setup the currently disabled motor first before making the switch
+        shoulder_motor_2.position(reversed_angle);
+        hal::delay(*clock, 500us);
+        shoulder_motor_2.torque_limit(100.0f);
+        hal::delay(*clock, 500us);
+        shoulder_motor_2.led(false);
+        hal::delay(*clock, 500us);
+
+        shoulder_motor_1.torque_enable(false);
+        hal::delay(*clock, 500us);
+        shoulder_motor_2.torque_enable(true);
+        hal::delay(*clock, 500us);
+        shoulder_motor_1.torque_limit(0.0f);
+        hal::delay(*clock, 500us);
+        shoulder_motor_1.led(true);
+        hal::delay(*clock, 500us);
+
+        leading_motor_active = false;
+      }
+    } else {
+      shoulder_motor_2.position(reversed_angle);
+      print_status();
+      if (shoulder_motor_2.last_error_code() & (1 << 5)) {  // over-torque
+        // Setup the currently disabled motor first before making the switch
+        shoulder_motor_1.position(shoulder_angle);
+        hal::delay(*clock, 500us);
+        shoulder_motor_1.torque_limit(100.0f);
+        hal::delay(*clock, 500us);
+        shoulder_motor_1.led(false);
+        hal::delay(*clock, 500us);
+
+        shoulder_motor_2.torque_enable(false);
+        hal::delay(*clock, 500us);
+        shoulder_motor_1.torque_enable(true);
+        hal::delay(*clock, 500us);
+
+        shoulder_motor_2.torque_limit(0.0f);
+        hal::delay(*clock, 500us);
+        shoulder_motor_2.led(true);
+
+        leading_motor_active = true;
+      }
+    }
 #endif
 
 #if KEEP_PUMP
