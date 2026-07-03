@@ -99,12 +99,11 @@ dynamixel_servo_protocol_1::scan_for_id(
 }
 
 void
-dynamixel_servo_protocol_1::execute_registered_action(
-  uint8_t p_id,
+dynamixel_servo_protocol_1::broadcast_execute_action(
   hal::strong_ptr<hal::serial> const& p_serial)
 {
   using namespace std::chrono_literals;
-  std::array<hal::byte, 6> send_bytes = { 0xFF, 0xFF, p_id, 0x02, 0x05, 0x00 };
+  std::array<hal::byte, 6> send_bytes = { 0xFF, 0xFF, 0xFE, 0x02, 0x05, 0x00 };
   hal::byte const checksum = std::accumulate(&send_bytes[2], &send_bytes[5], 0);
   send_bytes[5] = ~checksum;
   hal::write(*p_serial, send_bytes, hal::never_timeout());
@@ -331,7 +330,21 @@ dynamixel_servo_protocol_1::position(hal::degrees p_angle)
 void
 dynamixel_servo_protocol_1::execute_action()
 {
-  execute_registered_action(m_id, m_serial);
+  using namespace std::chrono_literals;
+  std::array<hal::byte, 6> send_bytes = { 0xFF, 0xFF, m_id, 0x02, 0x05, 0x00 };
+  hal::byte const checksum = std::accumulate(&send_bytes[2], &send_bytes[5], 0);
+  send_bytes[5] = ~checksum;
+  
+  m_last_error = 0;
+  do {
+    m_serial->flush();
+    hal::write(*m_serial, send_bytes, hal::never_timeout());
+    auto const response = hal::read<6>(
+      *m_serial, hal::create_timeout(*m_clock, m_response_timeout));
+    validate_response(response);
+    m_last_error = response[4];
+    // check if the last error had a checksum error
+  } while (m_last_error & (1 << 4));
 }
 
 void

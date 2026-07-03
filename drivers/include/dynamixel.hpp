@@ -111,13 +111,12 @@ public:
                         hal::strong_ptr<hal::steady_clock> const& p_clock);
 
   /**
-   * @brief Execute commands registered with reg write function.
+   * @brief Broadcast execute commands registered with reg write function.
    *
    * @param p_id - ID of servo to communicate with or 0xFE for broadcast
    * @param p_serial - Serial to use to communicate with servo
    */
-  static void execute_registered_action(
-    uint8_t p_id,
+  static void broadcast_execute_action(
     hal::strong_ptr<hal::serial> const& p_serial);
 
   /**
