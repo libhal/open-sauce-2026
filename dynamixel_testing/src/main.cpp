@@ -65,6 +65,7 @@ int main()
     };
 
   hal::optional_ptr<hal::actuator::dynamixel_servo_protocol_1> servo;
+  hal::optional_ptr<hal::actuator::dynamixel_servo_protocol_1> servo2;
 
   while (true) {
     try {
@@ -89,6 +90,31 @@ int main()
       hal::print(*console, "Servo led set [5]!\n");
       hal::delay(*clock, 10ms);
       hal::print(*console, "Servo initialized!\n");
+
+      // ======
+
+      servo2 = hal::make_strong_ptr<hal::actuator::dynamixel_servo_protocol_1>(
+        resources::driver_allocator(), uart, clock, wrist_config);
+      hal::print(*console, "Servo constructed [1]!\n");
+      hal::delay(*clock, 10ms);
+
+      servo->torque_limit(95.0f);
+      hal::print(*console, "Servo torque limit set [2]!\n");
+      hal::delay(*clock, 10ms);
+
+      servo->torque_enable(true);
+      hal::print(*console, "Servo torque enabled [3]!\n");
+      hal::delay(*clock, 10ms);
+
+      servo->speed(20.0f);
+      hal::print(*console, "Servo speed set [4]!\n");
+      hal::delay(*clock, 10ms);
+
+      servo->led(false);
+      hal::print(*console, "Servo led set [5]!\n");
+      hal::delay(*clock, 10ms);
+      hal::print(*console, "Servo initialized!\n");
+
       break;
     } catch (hal::io_error const&) {
       hal::print(*console, "❌ Servo init FAILED due to io_error!\n");
@@ -112,8 +138,10 @@ int main()
 
   hal::print(*console, "Setting up servo position...\n");
   servo->queue_position(180.0f);
+  servo2->queue_position(180.0f);
   hal::delay(*clock, 10ms);
   servo->execute_action();
+  servo2->execute_action();
   hal::print(*console, "Holding for 3 seconds...\n");
   hal::delay(*clock, 3s);
 
@@ -125,9 +153,16 @@ int main()
         action_counter++;
         print_status();
         hal::print<64>(*console, "deg = %d\n", static_cast<int>(deg));
+
         servo->queue_position(deg);
         hal::delay(*clock, 10ms);
         servo->execute_action();
+        hal::delay(*clock, 10ms);
+
+        servo2->queue_position(deg);
+        hal::delay(*clock, 10ms);
+        servo2->execute_action();
+        hal::delay(*clock, 10ms);
       } catch (hal::timed_out const&) {
         hal::print(*console, "❌  ⏰\n");
         timeout_counter++;
@@ -146,9 +181,16 @@ int main()
         action_counter++;
         print_status();
         hal::print<64>(*console, "deg = %d\n", static_cast<int>(deg));
+
         servo->queue_position(deg);
         hal::delay(*clock, 10ms);
         servo->execute_action();
+        hal::delay(*clock, 10ms);
+
+        servo2->queue_position(deg);
+        hal::delay(*clock, 10ms);
+        servo2->execute_action();
+        hal::delay(*clock, 10ms);
       } catch (hal::timed_out const&) {
         hal::print(*console, "❌  ⏰\n");
         timeout_counter++;
