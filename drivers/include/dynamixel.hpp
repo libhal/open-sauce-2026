@@ -404,10 +404,7 @@ public:
    *
    * @return auto - error code byte
    */
-  [[nodiscard]] auto last_error_code() const
-  {
-    return m_last_error;
-  }
+  [[nodiscard]] auto last_error_code() const { return m_last_error; }
 
 private:
   /**
@@ -511,6 +508,8 @@ private:
     /// @brief (MX-only) Goal acceleration
     goal_accel = 0x49,
   };
+
+  std::pair<u16, u16> position_range();
 
   void validate_response(std::span<byte const> p_response)
   {
@@ -621,5 +620,6 @@ private:
   hal::time_duration m_response_timeout;
   hal::byte m_id;
   hal::byte m_last_error;
+  dynamixel_servo m_servo_type = dynamixel_servo::mx;
 };
-}  // namespace hal::actuator
+} // namespace hal::actuator

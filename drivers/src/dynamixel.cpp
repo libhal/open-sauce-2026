@@ -32,7 +32,8 @@
 
 namespace hal::actuator {
 
-constexpr auto position_raw_range = std::make_pair<u16, u16>(0, 1023);
+constexpr auto position_rx_raw_range = std::make_pair<u16, u16>(0, 1023);
+constexpr auto position_mx_raw_range = std::make_pair<u16, u16>(0, 1023);
 constexpr auto max_degree_range =
   std::make_pair<hal::degrees, hal::degrees>(0.0f, 300.0f);
 constexpr auto rpm_range = std::make_pair<rpm, rpm>(0, 114);
@@ -46,6 +47,7 @@ dynamixel_servo_protocol_1::dynamixel_servo_protocol_1(
   , m_clock(p_clock)
   , m_response_timeout(p_settings.response_timeout)
   , m_id(p_settings.id)
+  , m_servo_type(p_settings.servo)
 {
   using namespace std::chrono_literals;
   m_serial->configure({ .baud_rate = p_settings.baud_rate });
@@ -56,7 +58,8 @@ dynamixel_servo_protocol_1::dynamixel_servo_protocol_1(
   }
 }
 
-bool dynamixel_servo_protocol_1::ping_id(
+bool
+dynamixel_servo_protocol_1::ping_id(
   u8 p_id,
   hal::strong_ptr<hal::serial> const& p_serial,
   hal::strong_ptr<hal::steady_clock> const& p_clock)
@@ -80,7 +83,8 @@ bool dynamixel_servo_protocol_1::ping_id(
   return true;
 }
 
-u8 dynamixel_servo_protocol_1::scan_for_id(
+u8
+dynamixel_servo_protocol_1::scan_for_id(
   hal::strong_ptr<hal::serial> const& p_serial,
   hal::strong_ptr<hal::steady_clock> const& p_clock)
 {
@@ -94,7 +98,8 @@ u8 dynamixel_servo_protocol_1::scan_for_id(
   return 254;
 }
 
-void dynamixel_servo_protocol_1::execute_registered_action(
+void
+dynamixel_servo_protocol_1::execute_registered_action(
   uint8_t p_id,
   hal::strong_ptr<hal::serial> const& p_serial)
 {
@@ -105,7 +110,8 @@ void dynamixel_servo_protocol_1::execute_registered_action(
   hal::write(*p_serial, send_bytes, hal::never_timeout());
 }
 
-void dynamixel_servo_protocol_1::ping_for_status()
+void
+dynamixel_servo_protocol_1::ping_for_status()
 {
   using namespace std::chrono_literals;
   std::array<hal::byte, 6> send_bytes = { 0xFF, 0xFF, m_id, 0x02, 0x01, 0x00 };
@@ -123,16 +129,18 @@ void dynamixel_servo_protocol_1::ping_for_status()
       m_last_error = response[4];
     }
   } catch (hal::timed_out const&) {
-    m_last_error = 1 << 4;  // set error to
+    m_last_error = 1 << 4; // set error to
   }
 }
 
-void dynamixel_servo_protocol_1::led(bool p_on)
+void
+dynamixel_servo_protocol_1::led(bool p_on)
 {
   write_register(registers::led_toggle, std::array{ static_cast<byte>(p_on) });
 }
 
-bool dynamixel_servo_protocol_1::is_moving()
+bool
+dynamixel_servo_protocol_1::is_moving()
 {
   auto const response =
     dynamixel_servo_protocol_1::read_register<1>(registers::moving_status);
@@ -142,13 +150,14 @@ bool dynamixel_servo_protocol_1::is_moving()
   return false;
 }
 
-float dynamixel_servo_protocol_1::speed()
+float
+dynamixel_servo_protocol_1::speed()
 {
   auto const bytes =
     dynamixel_servo_protocol_1::read_register<2>(registers::present_speed);
   u16 const response = (bytes[0] | (bytes[1] << 8));
   std::bitset<16> bits{ response };
-  bool const clockwise = bits[9];  // 10th bit is direction
+  bool const clockwise = bits[9]; // 10th bit is direction
   bits.set(9, false);
   float const rpms = hal::map(response, rpm_raw_range, rpm_range);
   if (clockwise) {
@@ -157,20 +166,23 @@ float dynamixel_servo_protocol_1::speed()
   return -rpms;
 }
 
-float dynamixel_servo_protocol_1::voltage()
+float
+dynamixel_servo_protocol_1::voltage()
 {
   auto const response =
     dynamixel_servo_protocol_1::read_register<1>(registers::present_voltage)[0];
   return static_cast<float>(response) / 10;
 }
 
-u8 dynamixel_servo_protocol_1::temperature()
+u8
+dynamixel_servo_protocol_1::temperature()
 {
   return dynamixel_servo_protocol_1::read_register<1>(
     registers::present_temp)[0];
 }
 
-float dynamixel_servo_protocol_1::torque_limit()
+float
+dynamixel_servo_protocol_1::torque_limit()
 {
   auto const bytes =
     dynamixel_servo_protocol_1::read_register<2>(registers::torque_limit);
@@ -178,33 +190,38 @@ float dynamixel_servo_protocol_1::torque_limit()
   return (static_cast<float>(response) / 1023) * 100.0f;
 }
 
-bool dynamixel_servo_protocol_1::torque_enable()
+bool
+dynamixel_servo_protocol_1::torque_enable()
 {
   auto const enabled_byte = dynamixel_servo_protocol_1::read_register<1>(
     dynamixel_servo_protocol_1::registers::torque_enable)[0];
   return enabled_byte == 0x01;
 }
 
-u8 dynamixel_servo_protocol_1::temperature_limit()
+u8
+dynamixel_servo_protocol_1::temperature_limit()
 {
   return dynamixel_servo_protocol_1::read_register<1>(registers::temp_limit)[0];
 }
 
-float dynamixel_servo_protocol_1::min_voltage()
+float
+dynamixel_servo_protocol_1::min_voltage()
 {
   auto const response =
     dynamixel_servo_protocol_1::read_register<1>(registers::min_voltage)[0];
   return (static_cast<float>(response) / 10);
 }
 
-float dynamixel_servo_protocol_1::max_voltage()
+float
+dynamixel_servo_protocol_1::max_voltage()
 {
   auto const response =
     dynamixel_servo_protocol_1::read_register<1>(registers::max_voltage)[0];
   return (static_cast<float>(response) / 10);
 }
 
-hertz dynamixel_servo_protocol_1::baud_rate()
+hertz
+dynamixel_servo_protocol_1::baud_rate()
 {
   auto const response =
     dynamixel_servo_protocol_1::read_register<1>(registers::baud_rate)[0];
@@ -231,50 +248,68 @@ hertz dynamixel_servo_protocol_1::baud_rate()
   }
 }
 
-std::chrono::microseconds dynamixel_servo_protocol_1::return_delay_time()
+std::chrono::microseconds
+dynamixel_servo_protocol_1::return_delay_time()
 {
   auto const response =
     dynamixel_servo_protocol_1::read_register<1>(registers::return_delay)[0];
   return std::chrono::microseconds(response * 2);
 }
 
-u8 dynamixel_servo_protocol_1::id()
+u8
+dynamixel_servo_protocol_1::id()
 {
   return m_id;
 }
 
-hal::degrees dynamixel_servo_protocol_1::min_angle()
+std::pair<u16, u16>
+dynamixel_servo_protocol_1::position_range()
+{
+  switch (m_servo_type) {
+    case dynamixel_servo::rx:
+      return position_rx_raw_range;
+    case dynamixel_servo::mx:
+      return position_mx_raw_range;
+  }
+}
+
+hal::degrees
+dynamixel_servo_protocol_1::min_angle()
 {
   auto const bytes =
     dynamixel_servo_protocol_1::read_register<2>(registers::cw_limit);
   u16 const angle_byte = (bytes[0] | (bytes[1] << 8));
-  return hal::map(angle_byte, position_raw_range, max_degree_range);
+  return hal::map(angle_byte, position_range(), max_degree_range);
 }
 
-hal::degrees dynamixel_servo_protocol_1::max_angle()
+hal::degrees
+dynamixel_servo_protocol_1::max_angle()
 {
   auto const bytes =
     dynamixel_servo_protocol_1::read_register<2>(registers::ccw_limit);
   u16 const angle_byte = (bytes[0] | (bytes[1] << 8));
-  return hal::map(angle_byte, position_raw_range, max_degree_range);
+  return hal::map(angle_byte, position_range(), max_degree_range);
 }
 
-hal::degrees dynamixel_servo_protocol_1::position()
+hal::degrees
+dynamixel_servo_protocol_1::position()
 {
   auto const bytes =
     dynamixel_servo_protocol_1::read_register<2>(registers::present_position);
   u16 const angle_byte = (bytes[0] | (bytes[1] << 8));
-  return hal::map(angle_byte, position_raw_range, max_degree_range);
+  return hal::map(angle_byte, position_range(), max_degree_range);
 }
 
-u16 dynamixel_servo_protocol_1::punch()
+u16
+dynamixel_servo_protocol_1::punch()
 {
   auto const bytes =
     dynamixel_servo_protocol_1::read_register<2>(registers::punch);
   return (bytes[0] | (bytes[1] << 8));
 }
 
-rpm dynamixel_servo_protocol_1::moving_speed()
+rpm
+dynamixel_servo_protocol_1::moving_speed()
 {
   auto const bytes =
     dynamixel_servo_protocol_1::read_register<2>(registers::moving_speed);
@@ -282,38 +317,43 @@ rpm dynamixel_servo_protocol_1::moving_speed()
   return hal::map(response, rpm_raw_range, rpm_range);
 }
 
-void dynamixel_servo_protocol_1::position(hal::degrees p_angle)
+void
+dynamixel_servo_protocol_1::position(hal::degrees p_angle)
 {
   auto const clamped_angle = std::clamp(p_angle, m_range.first, m_range.second);
   auto const angle_byte = static_cast<u16>(
-    hal::map(clamped_angle, max_degree_range, position_raw_range));
+    hal::map(clamped_angle, max_degree_range, position_range()));
   hal::byte const value_low = angle_byte;
   hal::byte const value_hi = (angle_byte >> 8);
   write_register(registers::goal_position, std::array{ value_low, value_hi });
 }
 
-void dynamixel_servo_protocol_1::execute_action()
+void
+dynamixel_servo_protocol_1::execute_action()
 {
   execute_registered_action(m_id, m_serial);
 }
 
-void dynamixel_servo_protocol_1::queue_position(hal::degrees p_angle)
+void
+dynamixel_servo_protocol_1::queue_position(hal::degrees p_angle)
 {
   auto const clamped_angle = std::clamp(p_angle, m_range.first, m_range.second);
   auto const angle_byte = static_cast<u16>(
-    hal::map(clamped_angle, max_degree_range, position_raw_range));
+    hal::map(clamped_angle, max_degree_range, position_range()));
   hal::byte const value_low = angle_byte;
   hal::byte const value_hi = (angle_byte >> 8);
   reg_write(registers::goal_position, std::array{ value_low, value_hi });
 }
 
-void dynamixel_servo_protocol_1::torque_enable(bool p_enable)
+void
+dynamixel_servo_protocol_1::torque_enable(bool p_enable)
 {
   write_register(registers::led_toggle,
                  std::array{ static_cast<byte>(p_enable) });
 }
 
-void dynamixel_servo_protocol_1::torque_limit(float p_percent)
+void
+dynamixel_servo_protocol_1::torque_limit(float p_percent)
 {
   auto const clamped_percent = std::clamp(p_percent, 0.0f, 100.0f);
   auto const value = static_cast<u16>(hal::map(
@@ -323,28 +363,32 @@ void dynamixel_servo_protocol_1::torque_limit(float p_percent)
   write_register(registers::torque_limit, std::array{ value_low, value_hi });
 }
 
-void dynamixel_servo_protocol_1::temperature_limit(u8 p_temperature)
+void
+dynamixel_servo_protocol_1::temperature_limit(u8 p_temperature)
 {
   auto const clamped_temp =
     std::clamp(p_temperature, static_cast<u8>(0), static_cast<u8>(100));
   write_register(registers::temp_limit, std::array{ clamped_temp });
 }
 
-void dynamixel_servo_protocol_1::min_voltage(float p_voltage)
+void
+dynamixel_servo_protocol_1::min_voltage(float p_voltage)
 {
   auto const clamped_volt = std::clamp(p_voltage, 5.0f, 25.0f);
   auto const value = static_cast<u8>(clamped_volt * 10);
   write_register(registers::min_voltage, std::array{ value });
 }
 
-void dynamixel_servo_protocol_1::max_voltage(float p_voltage)
+void
+dynamixel_servo_protocol_1::max_voltage(float p_voltage)
 {
   auto const clamped_volt = std::clamp(p_voltage, 5.0f, 25.0f);
   auto const value = static_cast<u8>(clamped_volt * 10);
   write_register(registers::max_voltage, std::array{ value });
 }
 
-void dynamixel_servo_protocol_1::baud_rate(hertz p_baud)
+void
+dynamixel_servo_protocol_1::baud_rate(hertz p_baud)
 {
   u8 baud_byte = 0x00;
   switch (static_cast<u32>(p_baud)) {
@@ -381,7 +425,8 @@ void dynamixel_servo_protocol_1::baud_rate(hertz p_baud)
   m_serial->configure({ .baud_rate = p_baud });
 }
 
-void dynamixel_servo_protocol_1::return_delay_time(
+void
+dynamixel_servo_protocol_1::return_delay_time(
   std::chrono::microseconds p_microseconds)
 {
   auto const value = static_cast<int>(p_microseconds.count() / 2);
@@ -389,35 +434,39 @@ void dynamixel_servo_protocol_1::return_delay_time(
   write_register(registers::return_delay, std::array{ clamped_value });
 }
 
-void dynamixel_servo_protocol_1::reassign_id(u8 p_id)
+void
+dynamixel_servo_protocol_1::reassign_id(u8 p_id)
 {
   m_id = std::clamp(p_id, static_cast<u8>(0), static_cast<u8>(253));
   write_register(registers::id, std::array{ p_id });
 }
 
-void dynamixel_servo_protocol_1::min_angle(hal::degrees p_angle)
+void
+dynamixel_servo_protocol_1::min_angle(hal::degrees p_angle)
 {
   m_range.first =
     std::clamp(p_angle, max_degree_range.first, max_degree_range.second);
   auto const angle_byte = static_cast<u16>(
-    hal::map(m_range.first, max_degree_range, position_raw_range));
+    hal::map(m_range.first, max_degree_range, position_range()));
   hal::byte const value_low = angle_byte;
   hal::byte const value_hi = (angle_byte >> 8);
   write_register(registers::cw_limit, std::array{ value_low, value_hi });
 }
 
-void dynamixel_servo_protocol_1::max_angle(hal::degrees p_angle)
+void
+dynamixel_servo_protocol_1::max_angle(hal::degrees p_angle)
 {
   m_range.second =
     std::clamp(p_angle, max_degree_range.first, max_degree_range.second);
   auto const angle_byte = static_cast<u16>(
-    hal::map(m_range.second, max_degree_range, position_raw_range));
+    hal::map(m_range.second, max_degree_range, position_range()));
   hal::byte const value_low = angle_byte;
   hal::byte const value_hi = (angle_byte >> 8);
   write_register(registers::ccw_limit, std::array{ value_low, value_hi });
 }
 
-void dynamixel_servo_protocol_1::speed(float p_rpms)
+void
+dynamixel_servo_protocol_1::speed(float p_rpms)
 {
   auto const clamped_rpm =
     std::clamp(p_rpms, rpm_range.first, rpm_range.second);
@@ -427,4 +476,4 @@ void dynamixel_servo_protocol_1::speed(float p_rpms)
   hal::byte const value_hi = (speed_byte >> 8);
   write_register(registers::moving_speed, std::array{ value_low, value_hi });
 }
-}  // namespace hal::actuator
+} // namespace hal::actuator
