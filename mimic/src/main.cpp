@@ -37,8 +37,8 @@
 #include <resource_list.hpp>
 
 #define KEEP_MIMIC true
-#define KEEP_ARM true
-#define KEEP_PUMP true
+#define KEEP_ARM false
+#define KEEP_PUMP false
 
 struct angle_select
 {
@@ -310,8 +310,8 @@ int main()
       if (prev_spin < 15 && sensors_angles[angle_select::t_spin] > 345) {
         rotations--;
       }
-      spin =
-        sensors_angles[angle_select::t_spin] - spin_offset + (360 * rotations);
+      spin = ((360 * rotations) + sensors_angles[angle_select::t_spin]) -
+             t_spin_offset;
 
       prev_spin = sensors_angles[angle_select::t_spin];
     }
