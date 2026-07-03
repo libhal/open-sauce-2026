@@ -33,7 +33,7 @@
 namespace hal::actuator {
 
 constexpr auto position_rx_raw_range = std::make_pair<u16, u16>(0, 1023);
-constexpr auto position_mx_raw_range = std::make_pair<u16, u16>(0, 1023);
+constexpr auto position_mx_raw_range = std::make_pair<u16, u16>(0, 4095);
 constexpr auto max_degree_range =
   std::make_pair<hal::degrees, hal::degrees>(0.0f, 300.0f);
 constexpr auto rpm_range = std::make_pair<rpm, rpm>(0, 114);
