@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <bitset>
 #include <cinttypes>
 #include <cstddef>
 #include <cstdint>
 
 #include <array>
+#include <libhal/serial.hpp>
 #include <utility>
 
 #include <libhal-actuator/mx_64.hpp>
@@ -137,6 +139,9 @@ int main()
   can_bus_manager->baud_rate(1.0_MHz);
   hal::print(*console, "Set can baud rate to 1 MHz\n");
 
+  hal::degrees spin_offset = 0;
+  hal::degrees t_spin_offset = 0;
+
 #if KEEP_PUMP
   // ===========================================================================
   // Setup Pump
@@ -194,10 +199,10 @@ int main()
   hal::delay(*clock, 10ms);
   shoulder_lead_servo.speed(10.0f);
   hal::delay(*clock, 10ms);
-  // shoulder_opose_servo.torque_limit(80.0f);
-  // hal::delay(*clock, 10ms);
-  // shoulder_opose_servo.speed(10.0f);
-  // hal::delay(*clock, 10ms);
+  shoulder_opose_servo.torque_limit(100.0f);
+  hal::delay(*clock, 10ms);
+  shoulder_opose_servo.speed(10.0f);
+  hal::delay(*clock, 10ms);
 
   wrist_servo.led(false);
   elbow_servo.led(false);
@@ -216,7 +221,18 @@ int main()
   init_ports.set(0);
   i2c_mux.set_ports(init_ports);
   hal::sensor::as5600 hall_sensor(i2c);
+
+  spin_offset = hall_sensor.raw_angle();
+
+  init_ports.set(0, false);
+  init_ports.set(4);
+  i2c_mux.set_ports(init_ports);
+  t_spin_offset = hall_sensor.raw_angle();
+
 #endif
+
+  hal::degrees prev_spin = 0;
+  int8_t rotations = 0;
 
   while (true) {
     status_led->level(pump_button.level());
@@ -269,8 +285,15 @@ int main()
       wrist_angle =
         process_angle(sensors_angles[angle_select::wrist_angle], 150.0f);
 
-      spin = sensors_angles[angle_select::spin];
-
+      if (prev_spin > 350 && sensors_angles[angle_select::spin] < 10) {
+        rotations++;
+      }
+      if (prev_spin < 10 && sensors_angles[angle_select::spin] > 350) {
+        rotations--;
+      }
+      spin =
+        sensors_angles[angle_select::spin] - spin_offset + (360 * rotations);
+      prev_spin = sensors_angles[angle_select::spin];
     } else {
       shoulder_angle = process_throttle_angle(
         sensors_angles[angle_select::t_shoulder], 150.0f);
@@ -281,7 +304,16 @@ int main()
       wrist_angle =
         process_throttle_angle(sensors_angles[angle_select::t_wrist], 150.0f);
 
-      spin = sensors_angles[angle_select::t_spin];
+      if (prev_spin > 345 && sensors_angles[angle_select::t_spin] < 15) {
+        rotations++;
+      }
+      if (prev_spin < 15 && sensors_angles[angle_select::t_spin] > 345) {
+        rotations--;
+      }
+      spin =
+        sensors_angles[angle_select::t_spin] - spin_offset + (360 * rotations);
+
+      prev_spin = sensors_angles[angle_select::t_spin];
     }
     shoulder_angle = std::clamp(shoulder_angle, 120.0f, 360.0f);
     hal::print(*console, "Mimic: [");
@@ -294,12 +326,48 @@ int main()
 
 #if KEEP_ARM
     spin_servo.position_control(spin, 10.0f);
-    wrist_servo.position(wrist_angle);
-    elbow_servo.position(elbow_angle);
-    shoulder_lead_servo.position(shoulder_angle);
+
+    wrist_servo.queue_position(wrist_angle);
+    hal::delay(*clock, 10ms);
+
+    elbow_servo.queue_position(elbow_angle);
+    hal::delay(*clock, 10ms);
+
+    shoulder_lead_servo.queue_position(shoulder_angle);
+    hal::delay(*clock, 10ms);
+
+    if (shoulder_lead_servo.last_error_code() & (1U << 5U)) {
+      shoulder_lead_servo.torque_enable(false);
+      hal::delay(*clock, 10ms);
+      shoulder_lead_servo.torque_limit(100.0f);
+      hal::delay(*clock, 10ms);
+      shoulder_lead_servo.torque_enable(true);
+      hal::delay(*clock, 10ms);
+      shoulder_lead_servo.queue_position(shoulder_angle);
+    }
+
+    auto reverse_angle = 300 - shoulder_angle;
+    shoulder_opose_servo.queue_position(reverse_angle);
+    hal::delay(*clock, 10ms);
+
+    if (shoulder_opose_servo.last_error_code() & (1U << 5U)) {
+      shoulder_opose_servo.torque_enable(false);
+      hal::delay(*clock, 10ms);
+      shoulder_opose_servo.torque_limit(100.0f);
+      hal::delay(*clock, 10ms);
+      shoulder_opose_servo.torque_enable(true);
+      hal::delay(*clock, 10ms);
+      shoulder_opose_servo.queue_position(reverse_angle);
+    }
+
+    hal::delay(*clock, 10ms);
+
+    actuator::rx_64::execute_registered_action(0xFE, uart);
+
     hal::print<64>(*console,
-                   "[W: %" PRIu8 " S: %" PRIu8 "]",
+                   "[W: %" PRIu8 " E: %" PRIu8 " S: %" PRIu8 "]",
                    wrist_servo.last_error_code(),
+                   elbow_servo.last_error_code(),
                    shoulder_lead_servo.last_error_code());
 #endif
 
