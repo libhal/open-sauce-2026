@@ -508,8 +508,6 @@ private:
     goal_accel = 0x49,
   };
 
-  std::pair<u16, u16> position_range();
-
   void validate_response(std::span<byte const> p_response)
   {
     if (p_response[0] != 0xFF or p_response[1] != 0xFF) {

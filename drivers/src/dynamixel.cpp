@@ -32,10 +32,27 @@
 
 namespace hal::actuator {
 
-constexpr auto position_rx_raw_range = std::make_pair<u16, u16>(0, 1023);
-constexpr auto position_mx_raw_range = std::make_pair<u16, u16>(0, 4095);
-constexpr auto max_degree_range =
-  std::make_pair<hal::degrees, hal::degrees>(0.0f, 300.0f);
+auto
+position_raw_range(dynamixel_servo p_servo_type)
+{
+  switch (p_servo_type) {
+    case dynamixel_servo::rx:
+      return std::make_pair<u16, u16>(0, 1023);
+    case dynamixel_servo::mx:
+      return std::make_pair<u16, u16>(0, 4095);
+  }
+}
+
+auto
+max_degree_range(dynamixel_servo p_servo_type)
+{
+  switch (p_servo_type) {
+    case dynamixel_servo::rx:
+      return std::make_pair<hal::degrees, hal::degrees>(0.0f, 300.0f);
+    case dynamixel_servo::mx:
+      return std::make_pair<hal::degrees, hal::degrees>(0.0f, 360.0f);
+  }
+}
 constexpr auto rpm_range = std::make_pair<rpm, rpm>(0, 114);
 constexpr auto rpm_raw_range = std::make_pair<u16, u16>(0, 1023);
 
@@ -261,24 +278,15 @@ dynamixel_servo_protocol_1::id()
   return m_id;
 }
 
-std::pair<u16, u16>
-dynamixel_servo_protocol_1::position_range()
-{
-  switch (m_servo_type) {
-    case dynamixel_servo::rx:
-      return position_rx_raw_range;
-    case dynamixel_servo::mx:
-      return position_mx_raw_range;
-  }
-}
-
 hal::degrees
 dynamixel_servo_protocol_1::min_angle()
 {
   auto const bytes =
     dynamixel_servo_protocol_1::read_register<2>(registers::cw_limit);
   u16 const angle_byte = (bytes[0] | (bytes[1] << 8));
-  return hal::map(angle_byte, position_range(), max_degree_range);
+  return hal::map(angle_byte,
+                  position_raw_range(m_servo_type),
+                  max_degree_range(m_servo_type));
 }
 
 hal::degrees
@@ -287,7 +295,9 @@ dynamixel_servo_protocol_1::max_angle()
   auto const bytes =
     dynamixel_servo_protocol_1::read_register<2>(registers::ccw_limit);
   u16 const angle_byte = (bytes[0] | (bytes[1] << 8));
-  return hal::map(angle_byte, position_range(), max_degree_range);
+  return hal::map(angle_byte,
+                  position_raw_range(m_servo_type),
+                  max_degree_range(m_servo_type));
 }
 
 hal::degrees
@@ -296,7 +306,9 @@ dynamixel_servo_protocol_1::position()
   auto const bytes =
     dynamixel_servo_protocol_1::read_register<2>(registers::present_position);
   u16 const angle_byte = (bytes[0] | (bytes[1] << 8));
-  return hal::map(angle_byte, position_range(), max_degree_range);
+  return hal::map(angle_byte,
+                  position_raw_range(m_servo_type),
+                  max_degree_range(m_servo_type));
 }
 
 u16
@@ -320,8 +332,10 @@ void
 dynamixel_servo_protocol_1::position(hal::degrees p_angle)
 {
   auto const clamped_angle = std::clamp(p_angle, m_range.first, m_range.second);
-  auto const angle_byte = static_cast<u16>(
-    hal::map(clamped_angle, max_degree_range, position_range()));
+  auto const angle_byte =
+    static_cast<u16>(hal::map(clamped_angle,
+                              max_degree_range(m_servo_type),
+                              position_raw_range(m_servo_type)));
   hal::byte const value_low = angle_byte;
   hal::byte const value_hi = (angle_byte >> 8);
   write_register(registers::goal_position, std::array{ value_low, value_hi });
@@ -334,7 +348,7 @@ dynamixel_servo_protocol_1::execute_action()
   std::array<hal::byte, 6> send_bytes = { 0xFF, 0xFF, m_id, 0x02, 0x05, 0x00 };
   hal::byte const checksum = std::accumulate(&send_bytes[2], &send_bytes[5], 0);
   send_bytes[5] = ~checksum;
-  
+
   m_last_error = 0;
   do {
     m_serial->flush();
@@ -351,8 +365,10 @@ void
 dynamixel_servo_protocol_1::queue_position(hal::degrees p_angle)
 {
   auto const clamped_angle = std::clamp(p_angle, m_range.first, m_range.second);
-  auto const angle_byte = static_cast<u16>(
-    hal::map(clamped_angle, max_degree_range, position_range()));
+  auto const angle_byte =
+    static_cast<u16>(hal::map(clamped_angle,
+                              max_degree_range(m_servo_type),
+                              position_raw_range(m_servo_type)));
   hal::byte const value_low = angle_byte;
   hal::byte const value_hi = (angle_byte >> 8);
   reg_write(registers::goal_position, std::array{ value_low, value_hi });
@@ -457,10 +473,13 @@ dynamixel_servo_protocol_1::reassign_id(u8 p_id)
 void
 dynamixel_servo_protocol_1::min_angle(hal::degrees p_angle)
 {
-  m_range.first =
-    std::clamp(p_angle, max_degree_range.first, max_degree_range.second);
-  auto const angle_byte = static_cast<u16>(
-    hal::map(m_range.first, max_degree_range, position_range()));
+  m_range.first = std::clamp(p_angle,
+                             max_degree_range(m_servo_type).first,
+                             max_degree_range(m_servo_type).second);
+  auto const angle_byte =
+    static_cast<u16>(hal::map(m_range.first,
+                              max_degree_range(m_servo_type),
+                              position_raw_range(m_servo_type)));
   hal::byte const value_low = angle_byte;
   hal::byte const value_hi = (angle_byte >> 8);
   write_register(registers::cw_limit, std::array{ value_low, value_hi });
@@ -469,10 +488,13 @@ dynamixel_servo_protocol_1::min_angle(hal::degrees p_angle)
 void
 dynamixel_servo_protocol_1::max_angle(hal::degrees p_angle)
 {
-  m_range.second =
-    std::clamp(p_angle, max_degree_range.first, max_degree_range.second);
-  auto const angle_byte = static_cast<u16>(
-    hal::map(m_range.second, max_degree_range, position_range()));
+  m_range.second = std::clamp(p_angle,
+                              max_degree_range(m_servo_type).first,
+                              max_degree_range(m_servo_type).second);
+  auto const angle_byte =
+    static_cast<u16>(hal::map(m_range.second,
+                              max_degree_range(m_servo_type),
+                              position_raw_range(m_servo_type)));
   hal::byte const value_low = angle_byte;
   hal::byte const value_hi = (angle_byte >> 8);
   write_register(registers::ccw_limit, std::array{ value_low, value_hi });
