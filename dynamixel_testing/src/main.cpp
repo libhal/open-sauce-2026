@@ -84,13 +84,18 @@ int main()
       hal::print(*console, "Servo torque enabled [3]!\n");
       hal::delay(*clock, 10ms);
 
-      servo->speed(100.0f);
+      servo->speed(60.0f);
       hal::print(*console, "Servo speed set [4]!\n");
       hal::delay(*clock, 10ms);
 
       servo->led(true);
       hal::print(*console, "Servo led set [5]!\n");
       hal::delay(*clock, 10ms);
+
+      servo->pid_p_gain(64);
+      hal::print(*console, "Servo PID set to 8 [6]!\n");
+      hal::delay(*clock, 10ms);
+
       hal::print(*console, "Servo initialized!\n");
 
       // ======
@@ -108,7 +113,7 @@ int main()
       hal::print(*console, "Servo2 torque enabled [3]!\n");
       hal::delay(*clock, 10ms);
 
-      servo2->speed(100.0f);
+      servo2->speed(30.0f);
       hal::print(*console, "Servo2 speed set [4]!\n");
       hal::delay(*clock, 10ms);
 
@@ -149,28 +154,28 @@ int main()
   hal::print(*console, "Holding for 3 seconds...\n");
   hal::delay(*clock, 3s);
 
-  constexpr auto degree_change = 2.0f;
+  constexpr auto degree_change = 5.0f;
   while (true) {
     int select = 0;
     for (hal::degrees deg = 120.0f; deg < 220.0f; deg += degree_change) {
       select++;
-      hal::delay(*clock, 150ms);
+      hal::delay(*clock, 500ms);
       try {
         action_counter++;
         print_status();
         hal::print<64>(*console, "deg = %d\n", static_cast<int>(deg));
 
-        if (select & 1) {
-          servo->queue_position(deg);
-          hal::delay(*clock, 10ms);
-          servo->execute_action();
-          hal::delay(*clock, 10ms);
-        } else {
-          servo2->queue_position(deg);
-          hal::delay(*clock, 10ms);
-          servo2->execute_action();
-          hal::delay(*clock, 10ms);
-        }
+        // if (select & 1) {
+        servo->queue_position(deg);
+        hal::delay(*clock, 10ms);
+        servo->execute_action();
+        hal::delay(*clock, 10ms);
+        // } else {
+        // servo2->queue_position(deg);
+        // hal::delay(*clock, 10ms);
+        // servo2->execute_action();
+        // hal::delay(*clock, 10ms);
+        // }
       } catch (hal::timed_out const&) {
         hal::print(*console, "❌  ⏰\n");
         timeout_counter++;
@@ -185,23 +190,23 @@ int main()
     }
     for (hal::degrees deg = 220.0f; deg > 120.0f; deg -= degree_change) {
       select++;
-      hal::delay(*clock, 150ms);
+      hal::delay(*clock, 500ms);
       try {
         action_counter++;
         print_status();
         hal::print<64>(*console, "deg = %d\n", static_cast<int>(deg));
 
-        if (select & 1) {
-          servo->queue_position(deg);
-          hal::delay(*clock, 10ms);
-          servo->execute_action();
-          hal::delay(*clock, 10ms);
-        } else {
-          servo2->queue_position(deg);
-          hal::delay(*clock, 10ms);
-          servo2->execute_action();
-          hal::delay(*clock, 10ms);
-        }
+        // if (select & 1) {
+        servo->queue_position(deg);
+        hal::delay(*clock, 10ms);
+        servo->execute_action();
+        hal::delay(*clock, 10ms);
+        // } else {
+        // servo2->queue_position(deg);
+        // hal::delay(*clock, 10ms);
+        // servo2->execute_action();
+        // hal::delay(*clock, 10ms);
+        // }
 
       } catch (hal::timed_out const&) {
         hal::print(*console, "❌  ⏰\n");

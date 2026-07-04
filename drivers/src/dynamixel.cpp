@@ -158,8 +158,7 @@ dynamixel_servo_protocol_1::led(bool p_on)
 bool
 dynamixel_servo_protocol_1::is_moving()
 {
-  auto const response =
-    dynamixel_servo_protocol_1::read_register<1>(registers::moving_status);
+  auto const response = read_register<1>(registers::moving_status);
   if (response[0] == 0x01) {
     return true;
   }
@@ -169,8 +168,7 @@ dynamixel_servo_protocol_1::is_moving()
 float
 dynamixel_servo_protocol_1::speed()
 {
-  auto const bytes =
-    dynamixel_servo_protocol_1::read_register<2>(registers::present_speed);
+  auto const bytes = read_register<2>(registers::present_speed);
   u16 const response = (bytes[0] | (bytes[1] << 8));
   std::bitset<16> bits{ response };
   bool const clockwise = bits[9]; // 10th bit is direction
@@ -185,23 +183,27 @@ dynamixel_servo_protocol_1::speed()
 float
 dynamixel_servo_protocol_1::voltage()
 {
-  auto const response =
-    dynamixel_servo_protocol_1::read_register<1>(registers::present_voltage)[0];
+  auto const response = read_register<1>(registers::present_voltage)[0];
   return static_cast<float>(response) / 10;
 }
 
 u8
 dynamixel_servo_protocol_1::temperature()
 {
-  return dynamixel_servo_protocol_1::read_register<1>(
-    registers::present_temp)[0];
+  return read_register<1>(registers::present_temp)[0];
+}
+void
+dynamixel_servo_protocol_1::pid_p_gain(u8 p_proportion)
+{
+  if (m_servo_type == dynamixel_servo::mx) {
+    write_register(registers::p_gain, std::array{ p_proportion });
+  }
 }
 
 float
 dynamixel_servo_protocol_1::torque_limit()
 {
-  auto const bytes =
-    dynamixel_servo_protocol_1::read_register<2>(registers::torque_limit);
+  auto const bytes = read_register<2>(registers::torque_limit);
   u16 const response = (bytes[0] | (bytes[1] << 8));
   return (static_cast<float>(response) / 1023) * 100.0f;
 }
@@ -209,38 +211,35 @@ dynamixel_servo_protocol_1::torque_limit()
 bool
 dynamixel_servo_protocol_1::torque_enable()
 {
-  auto const enabled_byte = dynamixel_servo_protocol_1::read_register<1>(
-    dynamixel_servo_protocol_1::registers::torque_enable)[0];
+  auto const enabled_byte =
+    read_register<1>(dynamixel_servo_protocol_1::registers::torque_enable)[0];
   return enabled_byte == 0x01;
 }
 
 u8
 dynamixel_servo_protocol_1::temperature_limit()
 {
-  return dynamixel_servo_protocol_1::read_register<1>(registers::temp_limit)[0];
+  return read_register<1>(registers::temp_limit)[0];
 }
 
 float
 dynamixel_servo_protocol_1::min_voltage()
 {
-  auto const response =
-    dynamixel_servo_protocol_1::read_register<1>(registers::min_voltage)[0];
+  auto const response = read_register<1>(registers::min_voltage)[0];
   return (static_cast<float>(response) / 10);
 }
 
 float
 dynamixel_servo_protocol_1::max_voltage()
 {
-  auto const response =
-    dynamixel_servo_protocol_1::read_register<1>(registers::max_voltage)[0];
+  auto const response = read_register<1>(registers::max_voltage)[0];
   return (static_cast<float>(response) / 10);
 }
 
 hertz
 dynamixel_servo_protocol_1::baud_rate()
 {
-  auto const response =
-    dynamixel_servo_protocol_1::read_register<1>(registers::baud_rate)[0];
+  auto const response = read_register<1>(registers::baud_rate)[0];
   switch (response) {
     case 1:
       return 1000000;
@@ -267,8 +266,7 @@ dynamixel_servo_protocol_1::baud_rate()
 std::chrono::microseconds
 dynamixel_servo_protocol_1::return_delay_time()
 {
-  auto const response =
-    dynamixel_servo_protocol_1::read_register<1>(registers::return_delay)[0];
+  auto const response = read_register<1>(registers::return_delay)[0];
   return std::chrono::microseconds(response * 2);
 }
 
@@ -281,8 +279,7 @@ dynamixel_servo_protocol_1::id()
 hal::degrees
 dynamixel_servo_protocol_1::min_angle()
 {
-  auto const bytes =
-    dynamixel_servo_protocol_1::read_register<2>(registers::cw_limit);
+  auto const bytes = read_register<2>(registers::cw_limit);
   u16 const angle_byte = (bytes[0] | (bytes[1] << 8));
   return hal::map(angle_byte,
                   position_raw_range(m_servo_type),
@@ -292,8 +289,7 @@ dynamixel_servo_protocol_1::min_angle()
 hal::degrees
 dynamixel_servo_protocol_1::max_angle()
 {
-  auto const bytes =
-    dynamixel_servo_protocol_1::read_register<2>(registers::ccw_limit);
+  auto const bytes = read_register<2>(registers::ccw_limit);
   u16 const angle_byte = (bytes[0] | (bytes[1] << 8));
   return hal::map(angle_byte,
                   position_raw_range(m_servo_type),
@@ -303,8 +299,7 @@ dynamixel_servo_protocol_1::max_angle()
 hal::degrees
 dynamixel_servo_protocol_1::position()
 {
-  auto const bytes =
-    dynamixel_servo_protocol_1::read_register<2>(registers::present_position);
+  auto const bytes = read_register<2>(registers::present_position);
   u16 const angle_byte = (bytes[0] | (bytes[1] << 8));
   return hal::map(angle_byte,
                   position_raw_range(m_servo_type),
@@ -314,16 +309,14 @@ dynamixel_servo_protocol_1::position()
 u16
 dynamixel_servo_protocol_1::punch()
 {
-  auto const bytes =
-    dynamixel_servo_protocol_1::read_register<2>(registers::punch);
+  auto const bytes = read_register<2>(registers::punch);
   return (bytes[0] | (bytes[1] << 8));
 }
 
 rpm
 dynamixel_servo_protocol_1::moving_speed()
 {
-  auto const bytes =
-    dynamixel_servo_protocol_1::read_register<2>(registers::moving_speed);
+  auto const bytes = read_register<2>(registers::moving_speed);
   u16 const response = (bytes[0] | (bytes[1] << 8));
   return hal::map(response, rpm_raw_range, rpm_range);
 }

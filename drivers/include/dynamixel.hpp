@@ -405,6 +405,8 @@ public:
    */
   [[nodiscard]] auto last_error_code() const { return m_last_error; }
 
+  void pid_p_gain(u8 p_proportion);
+
 private:
   /**
    * @brief Addresses for registers of servo
