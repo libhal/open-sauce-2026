@@ -113,7 +113,7 @@ int main()
 
   auto const clock = resources::clock();
   auto const console = resources::console();
-  hal::print(*console, "Mimic Application Starting...\n");
+  hal::print(*console, "Mimic Application Starting... 1\n");
 
   auto const i2c = resources::i2c();
   auto const uart = resources::uart2();
@@ -216,33 +216,33 @@ int main()
     uart, clock, shoulder_opposite_config);
   hal::print(*console, "support servo initialized\n");
 
-  wrist_servo.torque_limit(100.0f);
+  wrist_servo.torque_limit(95.0f);
   hal::delay(*clock, 10ms);
   wrist_servo.torque_enable(true);
   hal::delay(*clock, 10ms);
-  wrist_servo.speed(30.0f);
+  wrist_servo.speed(15.0f);
   hal::delay(*clock, 10ms);
 
-  elbow_servo.torque_limit(100.0f);
+  elbow_servo.torque_limit(90.0f);
   hal::delay(*clock, 10ms);
   elbow_servo.torque_enable(true);
   hal::delay(*clock, 10ms);
-  elbow_servo.speed(15.0f);
+  elbow_servo.speed(10.0f);
   hal::delay(*clock, 10ms);
 
-  shoulder_lead_servo.torque_limit(100.0f);
+  shoulder_lead_servo.torque_limit(95.0f);
   hal::delay(*clock, 10ms);
   shoulder_lead_servo.torque_enable(true);
   hal::delay(*clock, 10ms);
-  shoulder_lead_servo.speed(30.0f);
+  shoulder_lead_servo.speed(10.0f);
   hal::delay(*clock, 10ms);
 
-  shoulder_support_servo.torque_limit(100.0f);
-  hal::delay(*clock, 10ms);
-  shoulder_support_servo.torque_enable(false);
-  hal::delay(*clock, 10ms);
-  shoulder_support_servo.speed(10.0f);
-  hal::delay(*clock, 10ms);
+  // shoulder_support_servo.torque_limit(90.0f);
+  // hal::delay(*clock, 10ms);
+  // shoulder_support_servo.torque_enable(false);
+  // hal::delay(*clock, 10ms);
+  // shoulder_support_servo.speed(30.0f);
+  // hal::delay(*clock, 10ms);
 
   wrist_servo.led(false);
   elbow_servo.led(false);
@@ -255,7 +255,7 @@ int main()
     try {
       elbow_servo.queue_position(210.0f);
       hal::delay(*clock, 10ms);
-      wrist_servo.queue_position(180.0f);
+      wrist_servo.queue_position(185.0f);
       hal::delay(*clock, 10ms);
       shoulder_lead_servo.queue_position(150.0f);
       hal::delay(*clock, 10ms);
@@ -296,6 +296,7 @@ int main()
 
   hal::degrees prev_spin = 0;
   int8_t rotations = 0;
+  int servo_step = 0;
 
   while (true) {
     status_led->level(pump_button.level());
@@ -388,62 +389,100 @@ int main()
 #endif
 
 #if KEEP_ARM
-    spin_servo.position_control(spin, 10.0f);
+    spin_servo.position_control(spin, 7.5f);
+
+    hal::print(*console, "\n");
+    try {
+
+      elbow_servo.queue_position(elbow_angle);
+      hal::delay(*clock, 50ms);
+      servo_step = 1;
+
+      hal::print(*console, "E: ✅ - ");
+    } catch (hal::timed_out const&) {
+      hal::print(*console, "E: ⏰ - ");
+    } catch (hal::io_error const&) {
+      hal::print(*console, "E: 📡 - ");
+    } catch (...) {
+      hal::print(*console, "E: ⁉️ - ");
+    }
+    try {
+      wrist_servo.queue_position(wrist_angle);
+      hal::delay(*clock, 50ms);
+      servo_step = 2;
+      hal::print(*console, "W: ✅ - ");
+    } catch (hal::timed_out const&) {
+      hal::print(*console, "W: ⏰ - ");
+    } catch (hal::io_error const&) {
+      hal::print(*console, "W: 📡 - ");
+    } catch (...) {
+      hal::print(*console, "W: ⁉️ - ");
+    }
+
+    // try {
+    //   shoulder_lead_servo.queue_position(shoulder_angle);
+    //   hal::delay(*clock, 50ms);
+
+    //   if (shoulder_lead_servo.last_error_code() & (1U << 5U)) {
+    //     shoulder_lead_servo.torque_enable(false);
+    //     hal::delay(*clock, 50ms);
+    //     shoulder_lead_servo.torque_limit(100.0f);
+    //     hal::delay(*clock, 50ms);
+    //     shoulder_lead_servo.torque_enable(true);
+    //     hal::delay(*clock, 50ms);
+    //     shoulder_lead_servo.queue_position(shoulder_angle);
+    //   }
+    //   servo_step = 3;
+    //   hal::print(*console, "S: ✅ - ");
+    // } catch (hal::timed_out const&) {
+    //   hal::print(*console, "S: ⏰ - ");
+    // } catch (hal::io_error const&) {
+    //   hal::print(*console, "S: 📡 - ");
+    // } catch (...) {
+    //   hal::print(*console, "S: ⁉️ - ");
+    // }
+
+    // try {
+    //   auto const reverse_angle = 300 - shoulder_angle;
+    //   shoulder_support_servo.queue_position(reverse_angle);
+    //   hal::delay(*clock, 50ms);
+
+    //   if (shoulder_support_servo.last_error_code() & (1U << 5U)) {
+    //     shoulder_support_servo.torque_enable(false);
+    //     hal::delay(*clock, 50ms);
+    //     shoulder_support_servo.torque_limit(100.0f);
+    //     hal::delay(*clock, 50ms);
+    //     shoulder_support_servo.torque_enable(true);
+    //     hal::delay(*clock, 50ms);
+    //     shoulder_support_servo.queue_position(reverse_angle);
+    //   }
+    //   hal::delay(*clock, 50ms);
+    //   servo_step = 4;
+
+    //   hal::print(*console, "O: ✅ - ");
+
+    // } catch (hal::timed_out const&) {
+    //   hal::print(*console, "O: ⏰ - ");
+    // } catch (hal::io_error const&) {
+    //   hal::print(*console, "O: 📡 - ");
+    // } catch (...) {
+    //   hal::print(*console, "O: ⁉️ - ");
+    // }
 
     try {
-      elbow_servo.queue_position(elbow_angle);
-      hal::delay(*clock, 10ms);
-
-      wrist_servo.queue_position(wrist_angle);
-      hal::delay(*clock, 10ms);
-
-      shoulder_lead_servo.queue_position(shoulder_angle);
-      hal::delay(*clock, 50ms);
-
-      if (shoulder_lead_servo.last_error_code() & (1U << 5U)) {
-        shoulder_lead_servo.torque_enable(false);
-        hal::delay(*clock, 50ms);
-        shoulder_lead_servo.torque_limit(100.0f);
-        hal::delay(*clock, 50ms);
-        shoulder_lead_servo.torque_enable(true);
-        hal::delay(*clock, 50ms);
-        shoulder_lead_servo.queue_position(shoulder_angle);
-      }
-
-      auto reverse_angle = 300 - shoulder_angle;
-      shoulder_support_servo.queue_position(reverse_angle);
-      hal::delay(*clock, 10ms);
-
-      if (shoulder_support_servo.last_error_code() & (1U << 5U)) {
-        shoulder_support_servo.torque_enable(false);
-        hal::delay(*clock, 10ms);
-        shoulder_support_servo.torque_limit(100.0f);
-        hal::delay(*clock, 10ms);
-        shoulder_support_servo.torque_enable(true);
-        hal::delay(*clock, 10ms);
-        shoulder_support_servo.queue_position(reverse_angle);
-      }
-
-      hal::delay(*clock, 10ms);
-
-      wrist_servo.execute_action();
-      hal::delay(*clock, 10ms);
-      elbow_servo.execute_action();
-      hal::delay(*clock, 10ms);
-
       actuator::dynamixel_servo_protocol_1::broadcast_execute_action(uart);
-      hal::delay(*clock, 10ms);
-
+      hal::delay(*clock, 100ms);
+      hal::print(*console, "B: ✅ - ");
     } catch (hal::timed_out const&) {
-      hal::print(*console, "❌  ⏰\n");
+      hal::print(*console, "B: ⏰ - ");
     } catch (hal::io_error const&) {
-      hal::print(*console, "❌  📡\n");
+      hal::print(*console, "B: 📡 - ");
     } catch (...) {
-      hal::print(*console, "⁉️\n");
+      hal::print(*console, "B: ⁉️ - ");
     }
 
     hal::print<128>(*console,
-                    "[W: %" PRIu8 " E: %" PRIu8 " SL: %" PRIu8 " SS: %" PRIu8
+                    "\n[W: %" PRIu8 " E: %" PRIu8 " SL: %" PRIu8 " SS: %" PRIu8
                     "]",
                     wrist_servo.last_error_code(),
                     elbow_servo.last_error_code(),
