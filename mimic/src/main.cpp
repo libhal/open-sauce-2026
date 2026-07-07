@@ -169,17 +169,17 @@ int main()
   constexpr hal::actuator::dynamixel_servo_protocol_1::config wrist_config = {
     .servo = hal::actuator::dynamixel_servo::rx,
     .baud_rate = 57600,
-    .id = 3,
+    .id = 4,
     .min_angle = 60,
     .max_angle = 240,
     .response_timeout = 200ms
   };
   constexpr hal::actuator::dynamixel_servo_protocol_1::config elbow_config = {
-    .servo = hal::actuator::dynamixel_servo::mx,
+    .servo = hal::actuator::dynamixel_servo::rx,
     .baud_rate = 57600,
-    .id = 0,
-    .min_angle = 90,
-    .max_angle = 270,
+    .id = 3,
+    .min_angle = 60,
+    .max_angle = 240,
   };
   constexpr hal::actuator::dynamixel_servo_protocol_1::config
     shoulder_lead_config = {
@@ -200,14 +200,6 @@ int main()
 
   hal::print(*console, "Starting Dynamixel initialization\n");
 
-  auto wrist_servo =
-    hal::actuator::dynamixel_servo_protocol_1(uart, clock, wrist_config);
-  hal::print(*console, "wrist servo initialized\n");
-
-  auto elbow_servo =
-    hal::actuator::dynamixel_servo_protocol_1(uart, clock, elbow_config);
-  hal::print(*console, "elbow servo initialized\n");
-
   auto shoulder_lead_servo = hal::actuator::dynamixel_servo_protocol_1(
     uart, clock, shoulder_lead_config);
   hal::print(*console, "lead servo initialized\n");
@@ -215,6 +207,14 @@ int main()
   auto shoulder_support_servo = hal::actuator::dynamixel_servo_protocol_1(
     uart, clock, shoulder_opposite_config);
   hal::print(*console, "support servo initialized\n");
+
+  auto wrist_servo =
+    hal::actuator::dynamixel_servo_protocol_1(uart, clock, wrist_config);
+  hal::print(*console, "wrist servo initialized\n");
+
+  auto elbow_servo =
+    hal::actuator::dynamixel_servo_protocol_1(uart, clock, elbow_config);
+  hal::print(*console, "elbow servo initialized\n");
 
   wrist_servo.torque_limit(95.0f);
   hal::delay(*clock, 10ms);
@@ -237,12 +237,12 @@ int main()
   shoulder_lead_servo.speed(10.0f);
   hal::delay(*clock, 10ms);
 
-  // shoulder_support_servo.torque_limit(90.0f);
-  // hal::delay(*clock, 10ms);
-  // shoulder_support_servo.torque_enable(false);
-  // hal::delay(*clock, 10ms);
-  // shoulder_support_servo.speed(30.0f);
-  // hal::delay(*clock, 10ms);
+  shoulder_support_servo.torque_limit(90.0f);
+  hal::delay(*clock, 10ms);
+  shoulder_support_servo.torque_enable(false);
+  hal::delay(*clock, 10ms);
+  shoulder_support_servo.speed(30.0f);
+  hal::delay(*clock, 10ms);
 
   wrist_servo.led(false);
   elbow_servo.led(false);
@@ -419,55 +419,55 @@ int main()
       hal::print(*console, "W: ⁉️ - ");
     }
 
-    // try {
-    //   shoulder_lead_servo.queue_position(shoulder_angle);
-    //   hal::delay(*clock, 50ms);
+    try {
+      shoulder_lead_servo.queue_position(shoulder_angle);
+      hal::delay(*clock, 50ms);
 
-    //   if (shoulder_lead_servo.last_error_code() & (1U << 5U)) {
-    //     shoulder_lead_servo.torque_enable(false);
-    //     hal::delay(*clock, 50ms);
-    //     shoulder_lead_servo.torque_limit(100.0f);
-    //     hal::delay(*clock, 50ms);
-    //     shoulder_lead_servo.torque_enable(true);
-    //     hal::delay(*clock, 50ms);
-    //     shoulder_lead_servo.queue_position(shoulder_angle);
-    //   }
-    //   servo_step = 3;
-    //   hal::print(*console, "S: ✅ - ");
-    // } catch (hal::timed_out const&) {
-    //   hal::print(*console, "S: ⏰ - ");
-    // } catch (hal::io_error const&) {
-    //   hal::print(*console, "S: 📡 - ");
-    // } catch (...) {
-    //   hal::print(*console, "S: ⁉️ - ");
-    // }
+      if (shoulder_lead_servo.last_error_code() & (1U << 5U)) {
+        shoulder_lead_servo.torque_enable(false);
+        hal::delay(*clock, 50ms);
+        shoulder_lead_servo.torque_limit(100.0f);
+        hal::delay(*clock, 50ms);
+        shoulder_lead_servo.torque_enable(true);
+        hal::delay(*clock, 50ms);
+        shoulder_lead_servo.queue_position(shoulder_angle);
+      }
+      servo_step = 3;
+      hal::print(*console, "S: ✅ - ");
+    } catch (hal::timed_out const&) {
+      hal::print(*console, "S: ⏰ - ");
+    } catch (hal::io_error const&) {
+      hal::print(*console, "S: 📡 - ");
+    } catch (...) {
+      hal::print(*console, "S: ⁉️ - ");
+    }
 
-    // try {
-    //   auto const reverse_angle = 300 - shoulder_angle;
-    //   shoulder_support_servo.queue_position(reverse_angle);
-    //   hal::delay(*clock, 50ms);
+    try {
+      auto const reverse_angle = 300 - shoulder_angle;
+      shoulder_support_servo.queue_position(reverse_angle);
+      hal::delay(*clock, 50ms);
 
-    //   if (shoulder_support_servo.last_error_code() & (1U << 5U)) {
-    //     shoulder_support_servo.torque_enable(false);
-    //     hal::delay(*clock, 50ms);
-    //     shoulder_support_servo.torque_limit(100.0f);
-    //     hal::delay(*clock, 50ms);
-    //     shoulder_support_servo.torque_enable(true);
-    //     hal::delay(*clock, 50ms);
-    //     shoulder_support_servo.queue_position(reverse_angle);
-    //   }
-    //   hal::delay(*clock, 50ms);
-    //   servo_step = 4;
+      if (shoulder_support_servo.last_error_code() & (1U << 5U)) {
+        shoulder_support_servo.torque_enable(false);
+        hal::delay(*clock, 50ms);
+        shoulder_support_servo.torque_limit(100.0f);
+        hal::delay(*clock, 50ms);
+        shoulder_support_servo.torque_enable(true);
+        hal::delay(*clock, 50ms);
+        shoulder_support_servo.queue_position(reverse_angle);
+      }
+      hal::delay(*clock, 50ms);
+      servo_step = 4;
 
-    //   hal::print(*console, "O: ✅ - ");
+      hal::print(*console, "O: ✅ - ");
 
-    // } catch (hal::timed_out const&) {
-    //   hal::print(*console, "O: ⏰ - ");
-    // } catch (hal::io_error const&) {
-    //   hal::print(*console, "O: 📡 - ");
-    // } catch (...) {
-    //   hal::print(*console, "O: ⁉️ - ");
-    // }
+    } catch (hal::timed_out const&) {
+      hal::print(*console, "O: ⏰ - ");
+    } catch (hal::io_error const&) {
+      hal::print(*console, "O: 📡 - ");
+    } catch (...) {
+      hal::print(*console, "O: ⁉️ - ");
+    }
 
     try {
       actuator::dynamixel_servo_protocol_1::broadcast_execute_action(uart);

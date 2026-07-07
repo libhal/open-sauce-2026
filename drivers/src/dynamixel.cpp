@@ -370,7 +370,7 @@ dynamixel_servo_protocol_1::queue_position(hal::degrees p_angle)
 void
 dynamixel_servo_protocol_1::torque_enable(bool p_enable)
 {
-  write_register(registers::led_toggle,
+  write_register(registers::torque_enable,
                  std::array{ static_cast<byte>(p_enable) });
 }
 
