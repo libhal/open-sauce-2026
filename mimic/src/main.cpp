@@ -208,13 +208,13 @@ int main()
     uart, clock, shoulder_opposite_config);
   hal::print(*console, "support servo initialized\n");
 
-  auto wrist_servo =
-    hal::actuator::dynamixel_servo_protocol_1(uart, clock, wrist_config);
-  hal::print(*console, "wrist servo initialized\n");
-
   auto elbow_servo =
     hal::actuator::dynamixel_servo_protocol_1(uart, clock, elbow_config);
   hal::print(*console, "elbow servo initialized\n");
+
+  auto wrist_servo =
+    hal::actuator::dynamixel_servo_protocol_1(uart, clock, wrist_config);
+  hal::print(*console, "wrist servo initialized\n");
 
   wrist_servo.torque_limit(95.0f);
   hal::delay(*clock, 10ms);
@@ -222,6 +222,7 @@ int main()
   hal::delay(*clock, 10ms);
   wrist_servo.speed(15.0f);
   hal::delay(*clock, 10ms);
+  wrist_servo.led(false);
 
   elbow_servo.torque_limit(90.0f);
   hal::delay(*clock, 10ms);
@@ -229,6 +230,7 @@ int main()
   hal::delay(*clock, 10ms);
   elbow_servo.speed(10.0f);
   hal::delay(*clock, 10ms);
+  elbow_servo.led(false);
 
   shoulder_lead_servo.torque_limit(95.0f);
   hal::delay(*clock, 10ms);
@@ -236,17 +238,14 @@ int main()
   hal::delay(*clock, 10ms);
   shoulder_lead_servo.speed(10.0f);
   hal::delay(*clock, 10ms);
+  shoulder_lead_servo.led(false);
 
-  shoulder_support_servo.torque_limit(90.0f);
+  shoulder_support_servo.torque_limit(95.0f);
   hal::delay(*clock, 10ms);
   shoulder_support_servo.torque_enable(false);
   hal::delay(*clock, 10ms);
-  shoulder_support_servo.speed(30.0f);
+  shoulder_support_servo.speed(10.0f);
   hal::delay(*clock, 10ms);
-
-  wrist_servo.led(false);
-  elbow_servo.led(false);
-  shoulder_lead_servo.led(false);
   shoulder_support_servo.led(false);
 
   hal::print(*console, "Motors initialized\n");
@@ -296,7 +295,6 @@ int main()
 
   hal::degrees prev_spin = 0;
   int8_t rotations = 0;
-  int servo_step = 0;
 
   while (true) {
     status_led->level(pump_button.level());
@@ -344,7 +342,7 @@ int main()
         process_angle(sensors_angles[angle_select::shoulder_angle], 150.0f);
 
       elbow_angle =
-        process_angle(sensors_angles[angle_select::elbow_angle], 180.0f);
+        process_angle(sensors_angles[angle_select::elbow_angle], 150.0f);
 
       wrist_angle =
         process_angle(sensors_angles[angle_select::wrist_angle], 150.0f);
@@ -363,7 +361,7 @@ int main()
         sensors_angles[angle_select::t_shoulder], 150.0f);
 
       elbow_angle =
-        process_throttle_angle(sensors_angles[angle_select::t_elbow], 180.0f);
+        process_throttle_angle(sensors_angles[angle_select::t_elbow], 150.0f);
 
       wrist_angle =
         process_throttle_angle(sensors_angles[angle_select::t_wrist], 150.0f);
@@ -390,13 +388,13 @@ int main()
 
 #if KEEP_ARM
     spin_servo.position_control(spin, 7.5f);
-
+    int servo_step = 0;
     hal::print(*console, "\n");
     try {
-
+      hal::delay(*clock, 10ms);
       elbow_servo.queue_position(elbow_angle);
-      hal::delay(*clock, 50ms);
-      servo_step = 1;
+      hal::delay(*clock, 10ms);
+      servo_step++;
 
       hal::print(*console, "E: ✅ - ");
     } catch (hal::timed_out const&) {
@@ -406,10 +404,11 @@ int main()
     } catch (...) {
       hal::print(*console, "E: ⁉️ - ");
     }
+
     try {
       wrist_servo.queue_position(wrist_angle);
-      hal::delay(*clock, 50ms);
-      servo_step = 2;
+      hal::delay(*clock, 10ms);
+      servo_step++;
       hal::print(*console, "W: ✅ - ");
     } catch (hal::timed_out const&) {
       hal::print(*console, "W: ⏰ - ");
@@ -421,18 +420,18 @@ int main()
 
     try {
       shoulder_lead_servo.queue_position(shoulder_angle);
-      hal::delay(*clock, 50ms);
+      hal::delay(*clock, 10ms);
 
       if (shoulder_lead_servo.last_error_code() & (1U << 5U)) {
         shoulder_lead_servo.torque_enable(false);
-        hal::delay(*clock, 50ms);
+        hal::delay(*clock, 10ms);
         shoulder_lead_servo.torque_limit(100.0f);
-        hal::delay(*clock, 50ms);
+        hal::delay(*clock, 10ms);
         shoulder_lead_servo.torque_enable(true);
-        hal::delay(*clock, 50ms);
+        hal::delay(*clock, 10ms);
         shoulder_lead_servo.queue_position(shoulder_angle);
       }
-      servo_step = 3;
+      servo_step++;
       hal::print(*console, "S: ✅ - ");
     } catch (hal::timed_out const&) {
       hal::print(*console, "S: ⏰ - ");
@@ -445,19 +444,19 @@ int main()
     try {
       auto const reverse_angle = 300 - shoulder_angle;
       shoulder_support_servo.queue_position(reverse_angle);
-      hal::delay(*clock, 50ms);
+      hal::delay(*clock, 10ms);
 
       if (shoulder_support_servo.last_error_code() & (1U << 5U)) {
         shoulder_support_servo.torque_enable(false);
-        hal::delay(*clock, 50ms);
+        hal::delay(*clock, 10ms);
         shoulder_support_servo.torque_limit(100.0f);
-        hal::delay(*clock, 50ms);
+        hal::delay(*clock, 10ms);
         shoulder_support_servo.torque_enable(true);
-        hal::delay(*clock, 50ms);
+        hal::delay(*clock, 10ms);
         shoulder_support_servo.queue_position(reverse_angle);
       }
-      hal::delay(*clock, 50ms);
-      servo_step = 4;
+      hal::delay(*clock, 10ms);
+      servo_step++;
 
       hal::print(*console, "O: ✅ - ");
 
@@ -470,9 +469,13 @@ int main()
     }
 
     try {
-      actuator::dynamixel_servo_protocol_1::broadcast_execute_action(uart);
-      hal::delay(*clock, 100ms);
-      hal::print(*console, "B: ✅ - ");
+      if (servo_step > 0) {
+        actuator::dynamixel_servo_protocol_1::broadcast_execute_action(uart);
+        hal::delay(*clock, 10ms);
+        hal::print(*console, "B: ✅ - ");
+      } else {
+        hal::print(*console, "B: X - ");
+      }
     } catch (hal::timed_out const&) {
       hal::print(*console, "B: ⏰ - ");
     } catch (hal::io_error const&) {
@@ -484,8 +487,10 @@ int main()
     hal::print<128>(*console,
                     "\n[W: %" PRIu8 " E: %" PRIu8 " SL: %" PRIu8 " SS: %" PRIu8
                     "]",
-                    wrist_servo.last_error_code(),
-                    elbow_servo.last_error_code(),
+                    // wrist_servo.last_error_code(),
+                    // elbow_servo.last_error_code(),
+                    0,
+                    0,
                     shoulder_lead_servo.last_error_code(),
                     shoulder_support_servo.last_error_code());
 #endif
