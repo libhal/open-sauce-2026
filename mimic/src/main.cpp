@@ -72,16 +72,9 @@ hal::degrees process_throttle_angle(hal::degrees p_angle,
                                     hal::degrees p_servo_center)
 {
   hal::degrees const sensor_center = 180.0f;
-  auto const full_range =
-    std::make_pair(p_servo_center - 90.0f, p_servo_center + 90.0f);
-  auto const reduced_range =
-    std::make_pair(p_servo_center - 10.0f, p_servo_center + 90.0f);
-
   p_angle = std::clamp(p_angle, 90.0f, 270.0f);
   hal::degrees angle_diff = sensor_center - p_angle;
-  hal::degrees raw_angle = p_servo_center + angle_diff;
-
-  return hal::map(raw_angle, full_range, reduced_range);
+  return p_servo_center + angle_diff;
 }
 
 struct input_pin_inverter : public hal::input_pin
@@ -377,7 +370,7 @@ int main()
 
       prev_spin = sensors_angles[angle_select::t_spin];
     }
-    shoulder_angle = std::clamp(shoulder_angle, 120.0f, 360.0f);
+    shoulder_angle = std::clamp(shoulder_angle, 100.0f, 360.0f);
     hal::print(*console, "Mimic: [");
     hal::print<64>(*console, "Spin: %.2f  ", spin);
     hal::print<64>(*console, "Shoulder: %.2f    ", shoulder_angle);
