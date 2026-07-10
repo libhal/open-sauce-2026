@@ -41,6 +41,20 @@
 #define KEEP_ARM true
 #define KEEP_PUMP true
 
+#if KEEP_ARM
+#define ARM_INFO(status) status
+#define NO_ARM_INFO ""
+#else
+#define ARM_INFO(status) 0
+#define NO_ARM_INFO ""
+#endif
+
+// ANSI Escape Codes for terminal manipulation
+// Clears screen and moves cursor to top-left
+#define CLEAR_SCREEN "\x1B[2J\x1B[H"
+// Moves cursor to top-left without clearing (prevents flickering)
+#define CURSOR_HOME "\x1B[H"
+
 struct angle_select
 {
   enum angle_names : uint8_t
@@ -97,6 +111,14 @@ struct input_pin_inverter : public hal::input_pin
   hal::strong_ptr<hal::input_pin> m_input_pin;
 };
 
+// Pump states for the dashboard
+enum class pump_state
+{
+  idle,
+  pumping,
+  atmosphere
+};
+
 int main()
 {
   using namespace std::chrono_literals;
@@ -106,7 +128,7 @@ int main()
 
   auto const clock = resources::clock();
   auto const console = resources::console();
-  hal::print(*console, "Mimic Application Starting... 1\n");
+  hal::print(*console, "OpenSauce Mimic/Robot Arm Application Starting...\n");
 
   auto const i2c = resources::i2c();
   auto const uart = resources::uart2();
@@ -126,12 +148,25 @@ int main()
   auto const can_transceiver = resources::can_transceiver();
   auto const can_bus_manager = resources::can_bus_manager();
   auto const can_identifier_filter = resources::can_identifier_filter();
-  hal::print(*console, "All resources acquired\n");
+  hal::print(*console, "All resources acquired!\n");
 
   // Needs to be set to this baud rate to work with the default firmware CAN
   // baud rate.
   can_bus_manager->baud_rate(1.0_MHz);
   hal::print(*console, "Set can baud rate to 1 MHz\n");
+
+  constexpr char const* success = "✅";
+  constexpr char const* timeout = "⏰";
+  constexpr char const* io_error = "📡";
+  constexpr char const* unkown = "⁉️";
+
+  char const* e_status = "❌";
+  char const* w_status = "❌";
+  char const* s_status = "❌";
+  char const* o_status = "❌";
+  [[maybe_unused]] char const* b_status = "✅";  // Bus is usually active/ready
+
+  pump_state current_pump_mode = pump_state::idle;
 
   hal::degrees spin_offset = 0;
   hal::degrees t_spin_offset = 0;
@@ -153,11 +188,12 @@ int main()
   // ===========================================================================
   // Setup Robotic Arm
   // ===========================================================================
+  hal::print(*console, "Starting RMD DRC v2 initialization...\n");
   // Setup spin servo which uses the RMD-X7
   hal::actuator::rmd_drc_v2 spin_servo(
     *can_transceiver, *can_identifier_filter, *clock, 6.0f, 0x141);
 
-  hal::print(*console, "RMD DRC v2 initialized\n");
+  hal::print(*console, "RMD DRC v2 initialized!\n");
 
   constexpr hal::actuator::dynamixel_servo_protocol_1::config wrist_config = {
     .servo = hal::actuator::dynamixel_servo::rx,
@@ -191,7 +227,7 @@ int main()
       .max_angle = 240,
     };
 
-  hal::print(*console, "Starting Dynamixel initialization\n");
+  hal::print(*console, "Starting Dynamixel Initialization...\n");
 
   auto shoulder_lead_servo = hal::actuator::dynamixel_servo_protocol_1(
     uart, clock, shoulder_lead_config);
@@ -258,11 +294,11 @@ int main()
       hal::delay(*clock, 4s);
       break;
     } catch (hal::timed_out const&) {
-      hal::print(*console, "❌  ⏰\n");
+      hal::print<32>(*console, "❌  %s\n", timeout);
     } catch (hal::io_error const&) {
-      hal::print(*console, "❌  📡\n");
+      hal::print<32>(*console, "❌  %s\n", io_error);
     } catch (...) {
-      hal::print(*console, "⁉️\n");
+      hal::print<16>(*console, "%s\n", unkown);
     }
   } while (true);
 #endif
@@ -288,9 +324,13 @@ int main()
 
   hal::degrees prev_spin = 0;
   int8_t rotations = 0;
+  hal::print(*console, CLEAR_SCREEN);
 
   while (true) {
+    // If you see flickering, change CLEAR_SCREEN to CURSOR_HOME
+    hal::print(*console, CURSOR_HOME);
     status_led->level(pump_button.level());
+
 #if KEEP_MIMIC
     using namespace std::literals;
     using namespace hal;
@@ -320,7 +360,6 @@ int main()
         sensors_angles[i] = hall_sensor.raw_angle();
       }
     }
-
     // =========================================================================
     // Pass angles to mimic
     // =========================================================================
@@ -371,44 +410,38 @@ int main()
       prev_spin = sensors_angles[angle_select::t_spin];
     }
     shoulder_angle = std::clamp(shoulder_angle, 100.0f, 360.0f);
-    hal::print(*console, "Mimic: [");
-    hal::print<64>(*console, "Spin: %.2f  ", spin);
-    hal::print<64>(*console, "Shoulder: %.2f    ", shoulder_angle);
-    hal::print<64>(*console, "Elbow: %.2f    ", elbow_angle);
-    hal::print<64>(*console, "Wrist: %.2f ", wrist_angle);
-    hal::print(*console, "]");
 #endif
 
 #if KEEP_ARM
     spin_servo.position_control(spin, 7.5f);
     int servo_step = 0;
-    hal::print(*console, "\n");
+
     try {
       hal::delay(*clock, 10ms);
       elbow_servo.queue_position(elbow_angle);
       hal::delay(*clock, 10ms);
       servo_step++;
 
-      hal::print(*console, "E: ✅ - ");
+      e_status = success;
     } catch (hal::timed_out const&) {
-      hal::print(*console, "E: ⏰ - ");
+      e_status = timeout;
     } catch (hal::io_error const&) {
-      hal::print(*console, "E: 📡 - ");
+      e_status = io_error;
     } catch (...) {
-      hal::print(*console, "E: ⁉️ - ");
+      e_status = unkown;
     }
 
     try {
       wrist_servo.queue_position(wrist_angle);
       hal::delay(*clock, 10ms);
       servo_step++;
-      hal::print(*console, "W: ✅ - ");
+      w_status = success;
     } catch (hal::timed_out const&) {
-      hal::print(*console, "W: ⏰ - ");
+      w_status = timeout;
     } catch (hal::io_error const&) {
-      hal::print(*console, "W: 📡 - ");
+      w_status = io_error;
     } catch (...) {
-      hal::print(*console, "W: ⁉️ - ");
+      w_status = unkown;
     }
 
     try {
@@ -425,13 +458,13 @@ int main()
         shoulder_lead_servo.queue_position(shoulder_angle);
       }
       servo_step++;
-      hal::print(*console, "S: ✅ - ");
+      s_status = success;
     } catch (hal::timed_out const&) {
-      hal::print(*console, "S: ⏰ - ");
+      s_status = timeout;
     } catch (hal::io_error const&) {
-      hal::print(*console, "S: 📡 - ");
+      s_status = io_error;
     } catch (...) {
-      hal::print(*console, "S: ⁉️ - ");
+      s_status = unkown;
     }
 
     try {
@@ -451,41 +484,31 @@ int main()
       hal::delay(*clock, 10ms);
       servo_step++;
 
-      hal::print(*console, "O: ✅ - ");
+      o_status = success;
 
     } catch (hal::timed_out const&) {
-      hal::print(*console, "O: ⏰ - ");
+      o_status = timeout;
     } catch (hal::io_error const&) {
-      hal::print(*console, "O: 📡 - ");
+      o_status = io_error;
     } catch (...) {
-      hal::print(*console, "O: ⁉️ - ");
+      o_status = unkown;
     }
 
     try {
       if (servo_step > 0) {
         actuator::dynamixel_servo_protocol_1::broadcast_execute_action(uart);
         hal::delay(*clock, 10ms);
-        hal::print(*console, "B: ✅ - ");
+        b_status = success;
       } else {
-        hal::print(*console, "B: X - ");
+        b_status = "X";
       }
     } catch (hal::timed_out const&) {
-      hal::print(*console, "B: ⏰ - ");
+      b_status = timeout;
     } catch (hal::io_error const&) {
-      hal::print(*console, "B: 📡 - ");
+      b_status = io_error;
     } catch (...) {
-      hal::print(*console, "B: ⁉️ - ");
+      b_status = unkown;
     }
-
-    hal::print<128>(*console,
-                    "\n[W: %" PRIu8 " E: %" PRIu8 " SL: %" PRIu8 " SS: %" PRIu8
-                    "]",
-                    // wrist_servo.last_error_code(),
-                    // elbow_servo.last_error_code(),
-                    0,
-                    0,
-                    shoulder_lead_servo.last_error_code(),
-                    shoulder_support_servo.last_error_code());
 #endif
 
 #if KEEP_PUMP
@@ -496,17 +519,68 @@ int main()
       inflation_deadline = hal::future_deadline(*clock, inflation_time);
       pump_power->level(true);
       valve_open->level(false);
+      current_pump_mode = pump_state::pumping;
     } else {
       pump_power->level(false);
       if (inflation_deadline > clock->uptime()) {
         valve_open->level(true);
+        current_pump_mode = pump_state::atmosphere;
       } else {
         valve_open->level(false);
+        current_pump_mode = pump_state::idle;
       }
     }
-
 #endif
-    hal::print(*console, "\n");
+
+    // 2. Print Mimic Section
+    hal::print(*console, "========================================\n");
+    hal::print(*console, "    OpenSauce2026 Robot Arm DASHBOARD   \n");
+    hal::print(*console, "========================================\n");
+
+    // 3. Unified Joint Display (Works whether ARM is kept or not)
+    // We use the macro to decide if we show [emoji][binary] or nothing
+    hal::print<64>(*console,
+                   " Elbow: %5d° [0x%02X] %s \n",
+                   static_cast<int>(elbow_angle),
+                   ARM_INFO(elbow_servo.last_error_code()),
+                   e_status);
+    hal::print<64>(*console,
+                   " Wrist: %5d° [0x%02X] %s \n",
+                   static_cast<int>(wrist_angle),
+                   ARM_INFO(wrist_servo.last_error_code()),
+                   w_status);
+    hal::print<64>(*console,
+                   " Lead:  %5d° [0x%02X] %s \n",
+                   static_cast<int>(shoulder_angle),
+                   ARM_INFO(shoulder_lead_servo.last_error_code()),
+                   s_status);
+    hal::print<64>(*console,
+                   " Supp:  %5d° [0x%02X] %s \n",
+                   static_cast<int>(300 - shoulder_angle),
+                   ARM_INFO(shoulder_support_servo.last_error_code()),
+                   o_status);
+    hal::print<64>(*console,
+                   " Spin:  %5d° [0x%02X] %s \n",
+                   static_cast<int>(spin),
+                   0,
+                   success);
+
+    // 4. Pump Dashboard Section
+    hal::print(*console, "----------------------------------------\n");
+    hal::print(*console, " PUMP: ");
+    switch (current_pump_mode) {
+      case pump_state::pumping:
+        hal::print(*console, "🫳 [PUMPING]");
+        break;
+      case pump_state::atmosphere:
+        hal::print(*console, "🌬️ [VENTING] ");
+        break;
+      case pump_state::idle:
+        hal::print(*console, "💤 [IDLE]    ");
+        break;
+    }
+
+    hal::print(*console, "\n========================================\n");
   }
 }
 
