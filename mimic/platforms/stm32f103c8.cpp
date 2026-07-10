@@ -157,7 +157,7 @@ hal::v5::strong_ptr<hal::output_pin> pump_power()
 {
   if (not pump_power_ptr) {
     pump_power_ptr = hal::v5::make_strong_ptr<hal::stm32f1::output_pin>(
-      driver_allocator(), 'A', 15);  // G1
+      driver_allocator(), 'B', 13);  // G5
   }
 
   return pump_power_ptr;
@@ -168,7 +168,7 @@ hal::v5::strong_ptr<hal::output_pin> valve_control()
 {
   if (not valve_control_ptr) {
     valve_control_ptr = hal::v5::make_strong_ptr<hal::stm32f1::output_pin>(
-      driver_allocator(), 'B', 3);  // G2
+      driver_allocator(), 'B', 14);  // G6
   }
 
   return valve_control_ptr;
