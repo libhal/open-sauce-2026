@@ -38,8 +38,8 @@
 #include <resource_list.hpp>
 
 #define KEEP_MIMIC true
-#define KEEP_ARM true
-#define KEEP_PUMP true
+#define KEEP_ARM false
+#define KEEP_PUMP false
 
 #if KEEP_ARM
 #define ARM_INFO(status) status
@@ -156,9 +156,9 @@ int main()
   hal::print(*console, "Set can baud rate to 1 MHz\n");
 
   constexpr char const* success = "✅";
-  constexpr char const* timeout = "⏰";
-  constexpr char const* io_error = "📡";
-  constexpr char const* unkown = "⁉️";
+  [[maybe_unused]] constexpr char const* timeout = "⏰";
+  [[maybe_unused]] constexpr char const* io_error = "📡";
+  [[maybe_unused]] constexpr char const* unkown = "⁉️";
 
   char const* e_status = "❌";
   char const* w_status = "❌";
@@ -379,14 +379,16 @@ int main()
       wrist_angle =
         process_angle(sensors_angles[angle_select::wrist_angle], 150.0f);
 
-      if (prev_spin > 350 && sensors_angles[angle_select::spin] < 10) {
-        rotations++;
-      }
-      if (prev_spin < 10 && sensors_angles[angle_select::spin] > 350) {
+      if (prev_spin > 315 && sensors_angles[angle_select::spin] < 45) {
         rotations--;
       }
+      if (prev_spin < 45 && sensors_angles[angle_select::spin] > 315) {
+        rotations++;
+      }
+
       spin =
-        sensors_angles[angle_select::spin] - spin_offset + (360 * rotations);
+        (360 * rotations) - (sensors_angles[angle_select::spin] - spin_offset);
+
       prev_spin = sensors_angles[angle_select::spin];
     } else {
       shoulder_angle = process_throttle_angle(
@@ -398,14 +400,14 @@ int main()
       wrist_angle =
         process_throttle_angle(sensors_angles[angle_select::t_wrist], 150.0f);
 
-      if (prev_spin > 345 && sensors_angles[angle_select::t_spin] < 15) {
-        rotations++;
-      }
-      if (prev_spin < 15 && sensors_angles[angle_select::t_spin] > 345) {
+      if (prev_spin > 315 && sensors_angles[angle_select::t_spin] < 45) {
         rotations--;
       }
-      spin = ((360 * rotations) + sensors_angles[angle_select::t_spin]) -
-             t_spin_offset;
+      if (prev_spin < 45 && sensors_angles[angle_select::t_spin] > 315) {
+        rotations++;
+      }
+      spin = (360 * rotations) -
+             (sensors_angles[angle_select::t_spin] - t_spin_offset);
 
       prev_spin = sensors_angles[angle_select::t_spin];
     }
