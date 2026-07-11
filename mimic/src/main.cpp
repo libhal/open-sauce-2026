@@ -38,8 +38,8 @@
 #include <resource_list.hpp>
 
 #define KEEP_MIMIC true
-#define KEEP_ARM false
-#define KEEP_PUMP false
+#define KEEP_ARM true
+#define KEEP_PUMP true
 
 #if KEEP_ARM
 #define ARM_INFO(status) status
