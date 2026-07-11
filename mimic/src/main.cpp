@@ -323,7 +323,10 @@ int main()
 #endif
 
   hal::degrees prev_spin = 0;
+  hal::degrees prev_t_spin = 0;
   int8_t rotations = 0;
+  int8_t t_rotations = 0;
+
   hal::print(*console, CLEAR_SCREEN);
 
   while (true) {
@@ -400,16 +403,16 @@ int main()
       wrist_angle =
         process_throttle_angle(sensors_angles[angle_select::t_wrist], 150.0f);
 
-      if (prev_spin > 315 && sensors_angles[angle_select::t_spin] < 45) {
-        rotations--;
+      if (prev_t_spin > 315 && sensors_angles[angle_select::t_spin] < 45) {
+        t_rotations--;
       }
-      if (prev_spin < 45 && sensors_angles[angle_select::t_spin] > 315) {
-        rotations++;
+      if (prev_t_spin < 45 && sensors_angles[angle_select::t_spin] > 315) {
+        t_rotations++;
       }
-      spin = (360 * rotations) -
+      spin = (360 * t_rotations) -
              (sensors_angles[angle_select::t_spin] - t_spin_offset);
 
-      prev_spin = sensors_angles[angle_select::t_spin];
+      prev_t_spin = sensors_angles[angle_select::t_spin];
     }
     shoulder_angle = std::clamp(shoulder_angle, 100.0f, 360.0f);
 #endif
