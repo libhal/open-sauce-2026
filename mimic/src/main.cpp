@@ -246,35 +246,23 @@ int main()
   hal::print(*console, "wrist servo initialized\n");
 
   wrist_servo.torque_limit(95.0f);
-  hal::delay(*clock, 10ms);
   wrist_servo.torque_enable(true);
-  hal::delay(*clock, 10ms);
   wrist_servo.speed(15.0f);
-  hal::delay(*clock, 10ms);
   wrist_servo.led(false);
 
   elbow_servo.torque_limit(90.0f);
-  hal::delay(*clock, 10ms);
   elbow_servo.torque_enable(true);
-  hal::delay(*clock, 10ms);
   elbow_servo.speed(10.0f);
-  hal::delay(*clock, 10ms);
   elbow_servo.led(false);
 
   shoulder_lead_servo.torque_limit(95.0f);
-  hal::delay(*clock, 10ms);
   shoulder_lead_servo.torque_enable(true);
-  hal::delay(*clock, 10ms);
   shoulder_lead_servo.speed(10.0f);
-  hal::delay(*clock, 10ms);
   shoulder_lead_servo.led(false);
 
   shoulder_support_servo.torque_limit(95.0f);
-  hal::delay(*clock, 10ms);
   shoulder_support_servo.torque_enable(false);
-  hal::delay(*clock, 10ms);
   shoulder_support_servo.speed(10.0f);
-  hal::delay(*clock, 10ms);
   shoulder_support_servo.led(false);
 
   hal::print(*console, "Motors initialized\n");
@@ -282,13 +270,9 @@ int main()
   do {
     try {
       elbow_servo.queue_position(210.0f);
-      hal::delay(*clock, 10ms);
       wrist_servo.queue_position(185.0f);
-      hal::delay(*clock, 10ms);
       shoulder_lead_servo.queue_position(150.0f);
-      hal::delay(*clock, 10ms);
       shoulder_support_servo.queue_position(150.0f);
-      hal::delay(*clock, 10ms);
       hal::actuator::dynamixel_servo_protocol_1::broadcast_execute_action(uart);
       hal::print(*console, "Servos in postion for 4 seconds\n");
       hal::delay(*clock, 4s);
@@ -354,10 +338,6 @@ int main()
       ports.set(i);
       i2c_mux.set_ports(ports);
 
-      // TODO(#15): Determine shorter delay frequency for i2c mux. The mux
-      // should be able to switch at a much faster rate than 10ms.
-      hal::delay(*clock, 10ms);
-
       auto magnet_status = hall_sensor.magnet_status();
       if (magnet_status.detected) {
         sensors_angles[i] = hall_sensor.raw_angle();
@@ -422,9 +402,7 @@ int main()
     int servo_step = 0;
 
     try {
-      hal::delay(*clock, 10ms);
       elbow_servo.queue_position(elbow_angle);
-      hal::delay(*clock, 10ms);
       servo_step++;
 
       e_status = success;
@@ -438,7 +416,6 @@ int main()
 
     try {
       wrist_servo.queue_position(wrist_angle);
-      hal::delay(*clock, 10ms);
       servo_step++;
       w_status = success;
     } catch (hal::timed_out const&) {
@@ -451,15 +428,10 @@ int main()
 
     try {
       shoulder_lead_servo.queue_position(shoulder_angle);
-      hal::delay(*clock, 10ms);
-
       if (shoulder_lead_servo.last_error_code() & (1U << 5U)) {
         shoulder_lead_servo.torque_enable(false);
-        hal::delay(*clock, 10ms);
         shoulder_lead_servo.torque_limit(100.0f);
-        hal::delay(*clock, 10ms);
         shoulder_lead_servo.torque_enable(true);
-        hal::delay(*clock, 10ms);
         shoulder_lead_servo.queue_position(shoulder_angle);
       }
       servo_step++;
@@ -475,18 +447,12 @@ int main()
     try {
       auto const reverse_angle = 300 - shoulder_angle;
       shoulder_support_servo.queue_position(reverse_angle);
-      hal::delay(*clock, 10ms);
-
       if (shoulder_support_servo.last_error_code() & (1U << 5U)) {
         shoulder_support_servo.torque_enable(false);
-        hal::delay(*clock, 10ms);
         shoulder_support_servo.torque_limit(100.0f);
-        hal::delay(*clock, 10ms);
         shoulder_support_servo.torque_enable(true);
-        hal::delay(*clock, 10ms);
         shoulder_support_servo.queue_position(reverse_angle);
       }
-      hal::delay(*clock, 10ms);
       servo_step++;
 
       o_status = success;
@@ -502,7 +468,6 @@ int main()
     try {
       if (servo_step > 0) {
         actuator::dynamixel_servo_protocol_1::broadcast_execute_action(uart);
-        hal::delay(*clock, 10ms);
         b_status = success;
       } else {
         b_status = "X";
